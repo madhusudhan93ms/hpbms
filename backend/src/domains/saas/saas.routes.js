@@ -37,6 +37,7 @@ import {
   prepareDedicatedDatabase,
   activateDedicatedDatabase,
   exportHospitalData,
+  exportHospitalPatientsCsv,
 } from './saas.controller.js';
 import { verifyJwt } from '../../middleware/verifyJwt.js';
 import { requireRole } from '../../middleware/permissions.js';
@@ -74,6 +75,7 @@ router.patch('/hospitals/:id/domain', ...superAdminOnly, updateHospitalDomain);
 router.post('/hospitals/:id/database/prepare', ...superAdminOnly, prepareDedicatedDatabase);
 router.post('/hospitals/:id/database/activate', ...superAdminOnly, activateDedicatedDatabase);
 router.get('/hospitals/:id/export', verifyJwt, exportHospitalData);
+router.get('/hospitals/:id/export-patients-csv', verifyJwt, exportHospitalPatientsCsv);
 router.post('/hospitals/:id/extend-trial', ...superAdminOnly, extendHospitalTrial);
 router.post('/hospitals/:id/assign-plan', ...superAdminOnly, assignPlanToHospital);
 router.get('/search', ...superAdminOnly, globalSearch);

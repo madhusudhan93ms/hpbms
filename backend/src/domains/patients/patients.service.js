@@ -1,6 +1,9 @@
+import bcrypt from 'bcryptjs';
 import { Patient } from '../../models/Patient.js';
 import { Hospital } from '../../models/Hospital.js';
 import { GlobalPatient } from '../../models/GlobalPatient.js';
+import { User } from '../../models/User.js';
+import { GuardianLink } from '../../models/GuardianLink.js';
 import { ApiError } from '../../utils/apiError.js';
 import { requireBranchContext, requireHospitalContext } from '../../utils/tenantContext.js';
 
@@ -208,17 +211,19 @@ export class PatientsService {
     }
 
     // Generate unique, collision-free UHID auto-sequence (e.g. HOSP-2026-00001)
+    // Scoped to hospitalId + current year for accurate sequence numbering
     const year = new Date().getFullYear();
-    const totalCount = await Patient.countDocuments({});
-    let seqNum = totalCount + 1;
+    const yearStart = new Date(`${year}-01-01T00:00:00.000Z`);
+    const hospitalCount = await Patient.countDocuments({ hospitalId, createdAt: { $gte: yearStart } });
+    let seqNum = hospitalCount + 1;
     let uhid = `HOSP-${year}-${String(seqNum).padStart(5, '0')}`;
 
-    // Guarantee uniqueness by checking database
-    let existingPatient = await Patient.findOne({ uhid });
+    // Guarantee uniqueness — use index-efficient exact match
+    let existingPatient = await Patient.findOne({ hospitalId, uhid }).select('_id').lean();
     while (existingPatient) {
       seqNum++;
       uhid = `HOSP-${year}-${String(seqNum).padStart(5, '0')}`;
-      existingPatient = await Patient.findOne({ uhid });
+      existingPatient = await Patient.findOne({ hospitalId, uhid }).select('_id').lean();
     }
 
     // Calculate age if not provided
@@ -336,10 +341,8 @@ export class PatientsService {
       try {
         const userEmail = `${uhid.toLowerCase()}@hospital.local`;
         const userPassword = patientPhone || uhid;
-        const bcrypt = (await import('bcryptjs')).default;
-        const passwordHash = await bcrypt.hash(userPassword, 12);
-        const { User } = await import('../../models/User.js');
-        const { GuardianLink } = await import('../../models/GuardianLink.js');
+        // Cost 10: ~4x faster than 12, still cryptographically strong (>100ms)
+        const passwordHash = await bcrypt.hash(userPassword, 10);
 
         const existingUser = await User.findOne({
           $or: [
@@ -383,7 +386,7 @@ export class PatientsService {
             ? data.guardianEmail.toLowerCase().trim()
             : `guardian.${cleanGPhone.replace(/\D/g, '')}@hospital.local`;
           const gPassword = cleanGPhone;
-          const gPasswordHash = await bcrypt.hash(gPassword, 12);
+          const gPasswordHash = await bcrypt.hash(gPassword, 10);
 
           let guardianUser = await User.findOne({
             $or: [{ phone: cleanGPhone }, { email: gEmail }],
@@ -487,10 +490,10 @@ export class PatientsService {
   static async getPatients(user, query = '', targetHospitalId = null) {
     let filter = {};
     if (targetHospitalId && targetHospitalId !== 'ALL') {
-      filter.hospitalId = { $in: [targetHospitalId, String(targetHospitalId)] };
-    } else if (user?.role !== 'SUPER_ADMIN' && user?.hospitalId) {
+      filter.hospitalId = targetHospitalId;
+    } else if (user?.hospitalId && (user.role !== 'SUPER_ADMIN' || user._hospitalContextApplied)) {
       const hId = typeof user.hospitalId === 'object' ? user.hospitalId._id : user.hospitalId;
-      filter.hospitalId = { $in: [hId, String(hId)] };
+      filter.hospitalId = hId;
     }
 
     if (query) {
@@ -501,7 +504,12 @@ export class PatientsService {
         { phone: { $regex: query, $options: 'i' } },
       ];
     }
-    return await Patient.find(filter).sort({ createdAt: -1 }).limit(200);
+    // Select only fields needed for the roster list — avoid shipping full encrypted blobs
+    return await Patient.find(filter)
+      .select('firstName lastName uhid phone gender dob admissionStatus admissionCount activeAdmissionId branchId createdAt')
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .lean();
   }
 
   static async getPatientByUhid(uhid, user) {

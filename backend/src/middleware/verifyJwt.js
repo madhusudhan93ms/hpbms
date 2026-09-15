@@ -32,10 +32,11 @@ const moduleForRequest = (url) => {
 const applyContextIfNeeded = async (req) => {
   if (req.user?.role !== 'SUPER_ADMIN') return;
 
-  // Never divert Super Admin's identity profile or logout to a tenant context
+  // Never divert Super Admin's identity profile, logout, or SaaS platform management to a tenant context
   if (
     req.originalUrl?.startsWith('/api/v1/auth/me') ||
-    req.originalUrl?.startsWith('/api/v1/auth/logout')
+    req.originalUrl?.startsWith('/api/v1/auth/logout') ||
+    req.originalUrl?.startsWith('/api/v1/saas')
   ) {
     return;
   }
@@ -234,7 +235,8 @@ export const verifyJwt = async (req, res, next) => {
     }
     const isAuthProfileOrLogout = req.originalUrl?.startsWith('/api/v1/auth/me') ||
       req.originalUrl?.startsWith('/api/v1/auth/logout');
-    if (!isAuthProfileOrLogout) {
+    const isSuperAdminSaas = req.user.role === 'SUPER_ADMIN' && req.originalUrl?.startsWith('/api/v1/saas');
+    if (!isAuthProfileOrLogout && !isSuperAdminSaas) {
       await activateVerifiedTenantConnection(req.user);
     }
     next();

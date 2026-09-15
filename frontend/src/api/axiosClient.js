@@ -16,8 +16,13 @@ axiosClient.interceptors.request.use(
     }
 
     const isAuthProfileOrLogout = config.url?.includes('/auth/me') || config.url?.includes('/auth/logout');
+    const isGlobalSaasRoute = config.url?.startsWith('/saas/hospitals/stats') ||
+      config.url?.startsWith('/saas/hospitals/pending') ||
+      config.url?.startsWith('/saas/platform') ||
+      config.url?.startsWith('/saas/plans') ||
+      config.url === '/saas/hospitals';
 
-    if (!isAuthProfileOrLogout) {
+    if (!isAuthProfileOrLogout && !isGlobalSaasRoute) {
       // 1. Super Admin selected hospital context
       try {
         const stored = localStorage.getItem('hpmbs_super_admin_context');

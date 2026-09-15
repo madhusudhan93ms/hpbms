@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Building2, ShieldCheck, CheckCircle, CheckCircle2, XCircle, PlusCircle, Key, Eye, MapPin, Mail, Phone, Trash2, RotateCcw, Clock, X, AlertTriangle } from 'lucide-react';
+import { Building2, ShieldCheck, CheckCircle, CheckCircle2, XCircle, PlusCircle, Key, Eye, MapPin, Mail, Phone, Trash2, RotateCcw, Clock, X, AlertTriangle, Download } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -28,6 +28,7 @@ export const SuperAdminHospitalsPage = () => {
   const [modalError, setModalError] = useState(null);
   const [provisionedCreds, setProvisionedCreds] = useState(null);
   const [viewMode, setViewMode] = useState('cards');
+  const [exportingId, setExportingId] = useState(null);
 
   useScrollLock(isDirectCreateOpen || isEditCredentialsOpen || Boolean(provisionedCreds));
 
@@ -161,6 +162,28 @@ export const SuperAdminHospitalsPage = () => {
       setActionMessage(`Failed to permanently delete: ${err.error?.message || err.message}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleExportHospital = async (hospitalId, name, domain) => {
+    setExportingId(hospitalId);
+    try {
+      const archive = await axiosClient.get(`/saas/hospitals/${hospitalId}/export`, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(archive);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${domain || name || 'hospital'}-backup-${new Date().toISOString().slice(0, 10)}.ndjson`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setActionMessage(`Data backup for '${name}' downloaded successfully.`);
+    } catch (err) {
+      setActionMessage(`Export failed: ${err.error?.message || err.message}`);
+    } finally {
+      setExportingId(null);
     }
   };
 
@@ -378,9 +401,21 @@ export const SuperAdminHospitalsPage = () => {
                 </Button>
                 
                 {!hosp.isDeleted && hosp.status !== 'DELETED' && (
-                  <Button size="sm" variant="outline" className="flex-1 text-slate-700 bg-slate-50 border-slate-200 hover:bg-slate-100 font-bold gap-1" onClick={() => openEditCredentialsModal(hosp)}>
-                    <Key size={13} /> Admin
-                  </Button>
+                  <>
+                    <Button size="sm" variant="outline" className="flex-1 text-slate-700 bg-slate-50 border-slate-200 hover:bg-slate-100 font-bold gap-1" onClick={() => openEditCredentialsModal(hosp)}>
+                      <Key size={13} /> Admin
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 font-bold px-2.5"
+                      title="Export Hospital Data Backup"
+                      isLoading={exportingId === hosp._id}
+                      onClick={() => handleExportHospital(hosp._id, hosp.name, hosp.domain || hosp.subdomain)}
+                    >
+                      <Download size={13} />
+                    </Button>
+                  </>
                 )}
 
                 {hosp.isDeleted || hosp.status === 'DELETED' ? (
@@ -452,7 +487,10 @@ export const SuperAdminHospitalsPage = () => {
                     <td className="p-3 text-right flex items-center justify-end gap-1.5">
                       <Button size="sm" variant="primary" onClick={() => navigate(`/admin/hospital/${hosp._id}/dashboard`)}>View</Button>
                       {!hosp.isDeleted && hosp.status !== 'DELETED' && (
-                        <Button size="sm" variant="outline" onClick={() => openEditCredentialsModal(hosp)}>Admin</Button>
+                        <>
+                          <Button size="sm" variant="outline" onClick={() => openEditCredentialsModal(hosp)}>Admin</Button>
+                          <Button size="sm" variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200" title="Export Backup" isLoading={exportingId === hosp._id} onClick={() => handleExportHospital(hosp._id, hosp.name, hosp.domain || hosp.subdomain)}><Download size={13} /></Button>
+                        </>
                       )}
                       {hosp.isDeleted || hosp.status === 'DELETED' ? (
                         <>

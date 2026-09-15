@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -75,11 +75,13 @@ export const ReceptionWorkspaceView = () => {
   const fetchRegisteredPatients = useCallback(async () => {
     try {
       const res = await axiosClient.get('/patients');
-      setPatients(res.data || []);
+      const list = Array.isArray(res) ? res : (res?.data ?? res ?? []);
+      setPatients(Array.isArray(list) ? list : []);
     } catch (err) {
       console.error('Failed to load registered patients:', err);
     }
   }, []);
+
 
   const fetchQueuedPatients = useCallback(async () => {
     try {
@@ -132,50 +134,79 @@ export const ReceptionWorkspaceView = () => {
     fetchAllData();
   }, [fetchAllData]);
 
+  // Refs for debounce timers — prevents N re-fetches for N rapid socket events
+  const queueDebounceRef = useRef(null);
+  const doctorDebounceRef = useRef(null);
+
   // Real-time synchronization
   useEffect(() => {
     if (!socket) return;
 
+    // Patient registered: prepend directly from socket payload — NO extra API call
+    const handlePatientRegistered = (payload) => {
+      if (payload && payload.patientId) {
+        const newPatientCard = {
+          _id: payload.patientId,
+          uhid: payload.uhid,
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          phone: payload.phone,
+          gender: payload.gender || 'MALE',
+          dob: payload.dob || null,
+          admissionStatus: 'NEVER_ADMITTED',
+          createdAt: payload.timestamp || new Date().toISOString(),
+        };
+        setPatients((prev) => {
+          // Avoid duplicates if already in list
+          const exists = prev.some((p) => String(p._id) === String(payload.patientId));
+          return exists ? prev : [newPatientCard, ...prev];
+        });
+      } else {
+        // Fallback: payload missing — do a single debounced fetch
+        clearTimeout(queueDebounceRef.current);
+        queueDebounceRef.current = setTimeout(() => fetchRegisteredPatients(), 1500);
+      }
+    };
+
+    // Queue events: debounce 2s to collapse burst updates into one fetch
     const handleQueueUpdate = () => {
-      fetchQueuedPatients();
+      clearTimeout(queueDebounceRef.current);
+      queueDebounceRef.current = setTimeout(() => fetchQueuedPatients(), 2000);
     };
 
-    const handlePatientUpdate = () => {
-      fetchRegisteredPatients();
+    // Doctor/staff events: debounce 3s (changes are rare)
+    const handleDoctorUpdate = () => {
+      clearTimeout(doctorDebounceRef.current);
+      doctorDebounceRef.current = setTimeout(() => fetchDoctors(), 3000);
     };
 
-    const handleDoctorAvailabilityChange = () => {
-      fetchDoctors();
-    };
-
-    const handleStaffUpdate = () => {
-      fetchDoctors();
-    };
-
-    socket.on('patient:registered', handlePatientUpdate);
-    socket.on('patient:created', handlePatientUpdate);
+    socket.on('patient:registered', handlePatientRegistered);
+    socket.on('patient:created', handlePatientRegistered);
     socket.on('opd_queue:updated', handleQueueUpdate);
     socket.on('opd_queue:status_changed', handleQueueUpdate);
     socket.on('token:generated', handleQueueUpdate);
     socket.on('token:created', handleQueueUpdate);
-    socket.on('doctor:availability_changed', handleDoctorAvailabilityChange);
-    socket.on('staff:availability_changed', handleDoctorAvailabilityChange);
-    socket.on('staff:updated', handleStaffUpdate);
-    socket.on('user:status_changed', handleStaffUpdate);
+    socket.on('doctor:availability_changed', handleDoctorUpdate);
+    socket.on('staff:availability_changed', handleDoctorUpdate);
+    socket.on('staff:updated', handleDoctorUpdate);
+    socket.on('user:status_changed', handleDoctorUpdate);
     socket.on('workflow:notification', handleQueueUpdate);
 
     return () => {
-      socket.off('patient:registered', handlePatientUpdate);
-      socket.off('patient:created', handlePatientUpdate);
+      socket.off('patient:registered', handlePatientRegistered);
+      socket.off('patient:created', handlePatientRegistered);
       socket.off('opd_queue:updated', handleQueueUpdate);
       socket.off('opd_queue:status_changed', handleQueueUpdate);
       socket.off('token:generated', handleQueueUpdate);
       socket.off('token:created', handleQueueUpdate);
-      socket.off('doctor:availability_changed', handleDoctorAvailabilityChange);
-      socket.off('staff:availability_changed', handleDoctorAvailabilityChange);
-      socket.off('staff:updated', handleStaffUpdate);
-      socket.off('user:status_changed', handleStaffUpdate);
+      socket.off('doctor:availability_changed', handleDoctorUpdate);
+      socket.off('staff:availability_changed', handleDoctorUpdate);
+      socket.off('staff:updated', handleDoctorUpdate);
+      socket.off('user:status_changed', handleDoctorUpdate);
       socket.off('workflow:notification', handleQueueUpdate);
+      // Clean up pending debounce timers on unmount
+      clearTimeout(queueDebounceRef.current);
+      clearTimeout(doctorDebounceRef.current);
     };
   }, [socket, fetchQueuedPatients, fetchRegisteredPatients, fetchDoctors]);
 

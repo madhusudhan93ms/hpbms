@@ -2,6 +2,7 @@ import { SaasService } from './saas.service.js';
 import { sendSuccess } from '../../utils/apiResponse.js';
 import { TenantMigrationService } from './tenantMigration.service.js';
 import { TenantExportService, safeExportJson } from './tenantExport.service.js';
+import { decryptField } from '../../utils/fieldEncryption.js';
 import { once } from 'node:events';
 
 export const registerHospital = async (req, res, next) => {
@@ -66,6 +67,77 @@ export const exportHospitalData = async (req, res, next) => {
       if (!res.write(`${safeExportJson({ type: 'record', ...record })}\n`)) {
         await once(res, 'drain');
       }
+    }
+    res.end();
+  } catch (error) {
+    if (res.headersSent) return res.destroy(error);
+    next(error);
+  }
+};
+
+export const exportHospitalPatientsCsv = async (req, res, next) => {
+  try {
+    const { hospital, patients } = await TenantExportService.exportPatientsCsv(req.params.id, req.user);
+    const filename = `${hospital.domain || hospital.code || 'hospital'}-customers-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.status(200);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+
+    const safeDecrypt = (val) => {
+      if (!val) return '';
+      try {
+        const decrypted = decryptField(val);
+        return decrypted === 'N/A' || decrypted === 'General Registration' || decrypted === 'Self / N/A' || decrypted === '+1 (555) 000-0000'
+          ? ''
+          : String(decrypted || '');
+      } catch {
+        return '';
+      }
+    };
+
+    const headers = [
+      'UHID',
+      'First Name',
+      'Last Name',
+      'Phone Number',
+      'Gender',
+      'Age',
+      'Date of Birth',
+      'Blood Group',
+      'Category',
+      'Address',
+      'City',
+      'Emergency Contact Name',
+      'Emergency Contact Phone',
+      'Registration Date',
+    ];
+
+    res.write('\uFEFF'); // UTF-8 BOM for Microsoft Excel
+    res.write(headers.join(',') + '\r\n');
+
+    for (const p of patients) {
+      const rawAddr = p.address ? safeDecrypt(p.address) : '';
+      const emName = p.emergencyContact?.name ? safeDecrypt(p.emergencyContact.name) : '';
+      const emPhone = p.emergencyContact?.phone ? safeDecrypt(p.emergencyContact.phone) : '';
+
+      const row = [
+        `"${p.uhid || ''}"`,
+        `"${String(p.firstName || '').replace(/"/g, '""')}"`,
+        `"${String(p.lastName || '').replace(/"/g, '""')}"`,
+        `"${String(p.phone || '')}"`,
+        p.gender || '',
+        p.age || '',
+        p.dob ? new Date(p.dob).toISOString().slice(0, 10) : '',
+        p.bloodGroup || '',
+        p.category || 'GENERAL',
+        `"${rawAddr.replace(/"/g, '""')}"`,
+        `"${String(p.city || '').replace(/"/g, '""')}"`,
+        `"${emName.replace(/"/g, '""')}"`,
+        `"${emPhone.replace(/"/g, '""')}"`,
+        p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : '',
+      ];
+      res.write(row.join(',') + '\r\n');
     }
     res.end();
   } catch (error) {

@@ -36,6 +36,12 @@ blob-report/
 .DS_Store
 Thumbs.db
 
-# Scratch
+# Scratch & database dumps
 scratch/
+*.tar.gz
+hpmbs_prod/
+*.dump
+pull_production_db.ps1
+restore_prod_db.mjs
+backend/restore_prod_db.mjs
 

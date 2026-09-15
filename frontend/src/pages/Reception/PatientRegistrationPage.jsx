@@ -73,13 +73,16 @@ export const PatientRegistrationPage = () => {
   const fetchRecentPatients = async () => {
     try {
       const res = await axiosClient.get('/patients');
-      const list = Array.isArray(res) ? res : res?.data || [];
+      // axiosClient interceptor already returns response.data,
+      // so res = { success, data: [...] } or directly the array
+      const list = Array.isArray(res) ? res : (res?.data ?? res ?? []);
       setRecentPatients(Array.isArray(list) ? list : []);
     } catch (err) {
       console.error('Failed to load patients list:', err);
       setRecentPatients([]);
     }
   };
+
 
   const handleInlineSubmit = async (e, issueToken = false, force = false) => {
     if (e) e.preventDefault();
@@ -104,7 +107,9 @@ export const PatientRegistrationPage = () => {
         phone: '', address: '', chiefComplaints: '', bloodGroup: '', category: 'GENERAL',
         guardianName: '', guardianPhone: '', guardianRelationship: 'FATHER',
       });
-      fetchRecentPatients();
+
+      // Prepend to local list — no extra API round-trip needed
+      setRecentPatients((prev) => [newPat, ...prev].slice(0, 50));
 
       if (issueToken) {
         setSelectedPatientForToken(newPat);

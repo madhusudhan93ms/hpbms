@@ -77,4 +77,24 @@ export class TenantExportService {
       },
     };
   }
+
+  static async exportPatientsCsv(hospitalId, user) {
+    if (!mongoose.Types.ObjectId.isValid(String(hospitalId || ''))) {
+      throw new ApiError(400, 'A valid hospital id is required.');
+    }
+    const hospital = await Hospital.findById(hospitalId).lean();
+    if (!hospital || hospital.isDeleted) throw new ApiError(404, 'Hospital not found.');
+    assertExportAccess(hospital, user);
+
+    const connection = hospital.storageMode === 'DEDICATED'
+      ? getTenantConnection(hospital)
+      : mongoose.connection;
+
+    const patients = await connection.collection('patients')
+      .find({ hospitalId: { $in: [hospital._id, String(hospital._id)] } })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    return { hospital, patients };
+  }
 }

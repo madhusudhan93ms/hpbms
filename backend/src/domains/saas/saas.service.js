@@ -17,6 +17,7 @@ import { SubscriptionPlan } from '../../models/SubscriptionPlan.js';
 import { ROLES } from '../../config/constants.js';
 import { ApiError } from '../../utils/apiError.js';
 import { socketManager } from '../../events/socketManager.js';
+import { getTenantConnection } from '../../config/tenantDatabase.js';
 
 const PLATFORM_CODES = ['PLATFORM', 'PLATFORM-HQ'];
 
@@ -665,25 +666,64 @@ export class SaasService {
     const hospitals = await Hospital.find({
       code: { $nin: PLATFORM_CODES },
       subdomain: { $ne: 'platform' },
-    }).sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 }).lean();
 
+    if (!hospitals.length) return [];
+
+    const hospitalIds = hospitals.map((h) => h._id);
+    const todayStart = startOfToday();
+    const todayEnd = endOfToday();
+
+    const [admins, staffCounts, patientCounts, revenueCounts] = await Promise.all([
+      User.find({ hospitalId: { $in: hospitalIds }, role: ROLES.HOSPITAL_ADMIN })
+        .select('hospitalId name email lastLoginAt')
+        .lean(),
+      User.aggregate([
+        { $match: { hospitalId: { $in: hospitalIds }, role: { $nin: ['SUPER_ADMIN', 'PATIENT', 'GUARDIAN'] }, isActive: true } },
+        { $group: { _id: '$hospitalId', count: { $sum: 1 } } },
+      ]),
+      Patient.aggregate([
+        { $match: { hospitalId: { $in: hospitalIds } } },
+        { $group: { _id: '$hospitalId', count: { $sum: 1 } } },
+      ]),
+      Invoice.aggregate([
+        { $match: { hospitalId: { $in: hospitalIds }, createdAt: { $gte: todayStart, $lte: todayEnd } } },
+        { $group: { _id: '$hospitalId', total: { $sum: '$paidAmount' } } },
+      ]),
+    ]);
+
+    const adminMap = new Map(admins.map((a) => [String(a.hospitalId), a]));
+    const staffMap = new Map(staffCounts.map((s) => [String(s._id), s.count]));
+    const patientMap = new Map(patientCounts.map((p) => [String(p._id), p.count]));
+    const revenueMap = new Map(revenueCounts.map((r) => [String(r._id), r.total]));
+
+    const now = new Date();
     return Promise.all(
       hospitals.map(async (hospital) => {
-        const admin = await User.findOne({ hospitalId: hospital._id, role: ROLES.HOSPITAL_ADMIN }).select('name email lastLoginAt');
-        const totalStaff = await User.countDocuments({ hospitalId: hospital._id, role: { $nin: ['SUPER_ADMIN', 'PATIENT', 'GUARDIAN'] }, isActive: true });
-        const totalPatients = await Patient.countDocuments({ hospitalId: hospital._id });
-        const todayStart = startOfToday();
-        const todayEnd = endOfToday();
-        const revenueAgg = await Invoice.aggregate([
-          { $match: { hospitalId: hospital._id, createdAt: { $gte: todayStart, $lte: todayEnd } } },
-          { $group: { _id: null, total: { $sum: '$paidAmount' } } },
-        ]);
+        const hId = String(hospital._id);
+        const admin = adminMap.get(hId);
+        let totalPatients = patientMap.get(hId) || 0;
+        let totalStaff = staffMap.get(hId) || 0;
+        let todayRevenue = revenueMap.get(hId) || 0;
 
-        const now = new Date();
+        if (hospital.storageMode === 'DEDICATED' && totalPatients === 0) {
+          try {
+            const tenantConn = getTenantConnection(hospital);
+            if (tenantConn) {
+              const dedicatedPatients = await tenantConn.collection('patients').countDocuments({
+                hospitalId: { $in: [hospital._id, String(hospital._id)] },
+              });
+              if (dedicatedPatients > 0) totalPatients = dedicatedPatients;
+            }
+          } catch {
+            // ignore tenant lookup errors gracefully
+          }
+        }
+
         const isExpired = hospital.status === 'EXPIRED' || (hospital.subscriptionEndDate && new Date(hospital.subscriptionEndDate) < now);
 
         return {
-          ...hospital.toObject(),
+          ...hospital,
           isExpired,
           administrator: admin ? { name: admin.name, email: admin.email } : null,
           registrationDate: hospital.createdAt,
@@ -692,7 +732,7 @@ export class SaasService {
           lastLogin: admin?.lastLoginAt || null,
           totalStaff,
           totalPatients,
-          todayRevenue: revenueAgg[0]?.total || 0,
+          todayRevenue,
         };
       })
     );

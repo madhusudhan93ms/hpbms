@@ -6,7 +6,7 @@ import {
   Search, Key, Edit, CheckCircle2, Lock, X, ArrowDown,
   RefreshCw, AlertTriangle, Zap, TrendingUp, Globe, BadgeCheck, Clock,
   Building2, PauseCircle, PlayCircle, Trash2, MapPin, Phone, Mail, ExternalLink,
-  Database,
+  Database, Download,
 } from 'lucide-react';
 import { StatCard } from '../../components/ui/StatCard';
 import { Card } from '../../components/ui/Card';
@@ -381,8 +381,53 @@ export const SuperAdminHospitalDashboard = () => {
   const [databaseAction, setDatabaseAction] = useState('');
   const [databaseMessage, setDatabaseMessage] = useState('');
   const [databaseError, setDatabaseError] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState('');
 
   const detailsTableRef = useRef(null);
+
+  const handleExportData = async () => {
+    if (!hospitalId || isExporting) return;
+    setIsExporting(true);
+    setExportMessage('');
+    try {
+      const archive = await axiosClient.get(`/saas/hospitals/${hospitalId}/export`, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(archive);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${detail?.hospital?.domain || detail?.hospital?.code || 'hospital'}-backup-${new Date().toISOString().slice(0, 10)}.ndjson`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setExportMessage('Hospital data backup downloaded successfully!');
+    } catch (err) {
+      setExportMessage(`Export failed: ${err.error?.message || err.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPatientsCsv = async () => {
+    if (!hospitalId) return;
+    try {
+      const archive = await axiosClient.get(`/saas/hospitals/${hospitalId}/export-patients-csv`, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(archive);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${detail?.hospital?.domain || detail?.hospital?.code || 'hospital'}-customers-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download CSV:', err);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -566,7 +611,17 @@ export const SuperAdminHospitalDashboard = () => {
               Super Admin Control Console · Hospital ID: {hospital._id} · Primary Admin: <strong>{hospital.administrator?.email || hospital.contactEmail}</strong>
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold gap-1.5"
+              onClick={handleExportData}
+              isLoading={isExporting}
+            >
+              <Download size={13} />
+              Export Data Backup
+            </Button>
             <Button
               size="sm"
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-2"
@@ -580,6 +635,15 @@ export const SuperAdminHospitalDashboard = () => {
             </Button>
           </div>
         </div>
+
+        {exportMessage && (
+          <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between">
+            <span className="flex items-center gap-2"><CheckCircle2 size={16} /> {exportMessage}</span>
+            <button onClick={() => setExportMessage('')} className="text-emerald-500 hover:text-emerald-700 p-1">
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* Subscription Status Bar */}
         <SubscriptionStatusBar
@@ -828,7 +892,22 @@ export const SuperAdminHospitalDashboard = () => {
 
             {/* TAB 2: PATIENTS DIRECTORY */}
             {activeTab === 'patients' && (
-              <div className="overflow-x-auto">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
+                  <p className="text-xs text-slate-500">
+                    Showing <strong>{filteredPatients.length}</strong> patient customer records.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold gap-1.5"
+                    onClick={handleExportPatientsCsv}
+                  >
+                    <Download size={13} />
+                    Download Customers (Excel / CSV)
+                  </Button>
+                </div>
+                <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
                     <tr>
@@ -858,7 +937,8 @@ export const SuperAdminHospitalDashboard = () => {
                   <div className="p-8 text-center text-slate-500 text-xs">No patients found.</div>
                 )}
               </div>
-            )}
+            </div>
+          )}
 
             {/* TAB 3: REVENUE & PERFORMANCE LEDGER */}
             {activeTab === 'revenue' && (
