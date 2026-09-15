@@ -88,14 +88,39 @@ const buildStaffCounts = async (hospitalId = null) => {
 };
 
 const buildPatientCounts = async (hospitalId = null) => {
-  const base = hospitalId ? { hospitalId } : {};
-  const totalPatients = await Patient.countDocuments(base);
-  const ipdPatients = await Admission.countDocuments({
+  const base = hospitalId ? { hospitalId: { $in: [hospitalId, String(hospitalId)] } } : {};
+  let totalPatients = await Patient.countDocuments(base);
+  let ipdPatients = await Admission.countDocuments({
     ...base,
     status: 'ADMITTED',
   });
-  const opdPatients = Math.max(0, totalPatients - ipdPatients);
 
+  if (hospitalId) {
+    try {
+      const hospital = await Hospital.findById(hospitalId).lean();
+      if (hospital && hospital.storageMode === 'DEDICATED') {
+        const tenantConn = getTenantConnection(hospital);
+        if (tenantConn) {
+          const filter = { hospitalId: { $in: [hospital._id, String(hospital._id)] } };
+          const dedicatedPatients = await tenantConn.collection('patients').countDocuments(filter);
+          if (dedicatedPatients > 0) {
+            totalPatients = dedicatedPatients;
+          }
+          const dedicatedIpd = await tenantConn.collection('admissions').countDocuments({
+            ...filter,
+            status: 'ADMITTED',
+          });
+          if (dedicatedIpd > 0) {
+            ipdPatients = dedicatedIpd;
+          }
+        }
+      }
+    } catch {
+      // ignore tenant lookup errors gracefully
+    }
+  }
+
+  const opdPatients = Math.max(0, totalPatients - ipdPatients);
   return { totalPatients, opdPatients, ipdPatients };
 };
 
@@ -498,12 +523,30 @@ export class SaasService {
       };
     });
 
-    const patientList = await Patient.find({
-      hospitalId: { $in: [hospitalObjId, hospitalStrId] }
-    })
-      .sort({ createdAt: -1 })
-      .limit(200)
-      .lean();
+    let patientList = [];
+    if (hospital.storageMode === 'DEDICATED') {
+      try {
+        const tenantConn = getTenantConnection(hospital);
+        if (tenantConn) {
+          patientList = await tenantConn.collection('patients')
+            .find({ hospitalId: { $in: [hospitalObjId, hospitalStrId] } })
+            .sort({ createdAt: -1 })
+            .limit(500)
+            .toArray();
+        }
+      } catch (err) {
+        console.error('Failed to load dedicated patient list:', err);
+      }
+    }
+
+    if (!patientList.length) {
+      patientList = await Patient.find({
+        hospitalId: { $in: [hospitalObjId, hospitalStrId] }
+      })
+        .sort({ createdAt: -1 })
+        .limit(500)
+        .lean();
+    }
 
     const branches = await Branch.find({
       hospitalId: { $in: [hospitalObjId, hospitalStrId] }
@@ -706,7 +749,7 @@ export class SaasService {
         let totalStaff = staffMap.get(hId) || 0;
         let todayRevenue = revenueMap.get(hId) || 0;
 
-        if (hospital.storageMode === 'DEDICATED' && totalPatients === 0) {
+        if (hospital.storageMode === 'DEDICATED') {
           try {
             const tenantConn = getTenantConnection(hospital);
             if (tenantConn) {
@@ -714,6 +757,13 @@ export class SaasService {
                 hospitalId: { $in: [hospital._id, String(hospital._id)] },
               });
               if (dedicatedPatients > 0) totalPatients = dedicatedPatients;
+
+              const dedicatedStaff = await tenantConn.collection('users').countDocuments({
+                hospitalId: { $in: [hospital._id, String(hospital._id)] },
+                role: { $nin: ['SUPER_ADMIN', 'PATIENT', 'GUARDIAN'] },
+                isActive: true,
+              });
+              if (dedicatedStaff > 0) totalStaff = dedicatedStaff;
             }
           } catch {
             // ignore tenant lookup errors gracefully
