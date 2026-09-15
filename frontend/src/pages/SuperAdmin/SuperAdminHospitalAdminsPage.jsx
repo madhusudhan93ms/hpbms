@@ -24,10 +24,14 @@ const HOSPITAL_STAT_ITEMS = [
 
 export const SuperAdminHospitalAdminsPage = () => {
   const navigate = useNavigate();
-  const { setSelectedHospital } = useSuperAdminContextStore();
-  const [overview, setOverview] = useState([]);
-  const [expanded, setExpanded] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
+  const { setSelectedHospital, hospitalAdminsOverview, setHospitalAdminsOverview } = useSuperAdminContextStore();
+  const [overview, setOverview] = useState(() => hospitalAdminsOverview || []);
+  const [expanded, setExpanded] = useState(() => {
+    const initial = {};
+    (hospitalAdminsOverview || []).forEach((h) => { initial[h.hospitalId] = true; });
+    return initial;
+  });
+  const [isLoading, setIsLoading] = useState(() => (hospitalAdminsOverview || []).length === 0);
 
   useEffect(() => {
     const load = async () => {
@@ -35,9 +39,14 @@ export const SuperAdminHospitalAdminsPage = () => {
         const res = await axiosClient.get('/saas/hospitals/overview');
         const data = res.data?.data || res.data || [];
         setOverview(data);
-        const initial = {};
-        data.forEach((h) => { initial[h.hospitalId] = true; });
-        setExpanded(initial);
+        setHospitalAdminsOverview(data);
+        setExpanded((prev) => {
+          const next = { ...prev };
+          data.forEach((h) => {
+            if (next[h.hospitalId] === undefined) next[h.hospitalId] = true;
+          });
+          return next;
+        });
       } catch (err) {
         console.error(err);
       } finally {
@@ -45,7 +54,7 @@ export const SuperAdminHospitalAdminsPage = () => {
       }
     };
     load();
-  }, []);
+  }, [setHospitalAdminsOverview]);
 
   const toggle = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
@@ -54,7 +63,7 @@ export const SuperAdminHospitalAdminsPage = () => {
     navigate(`/admin/hospital/${hospitalId}/${route}`);
   };
 
-  if (isLoading) return <div className="text-center py-16 text-slate-500">Loading hospital administrator overview...</div>;
+  if (isLoading && overview.length === 0) return <div className="text-center py-16 text-slate-500">Loading hospital administrator overview...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">

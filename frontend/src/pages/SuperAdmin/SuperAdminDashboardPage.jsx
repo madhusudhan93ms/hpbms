@@ -13,6 +13,7 @@ import { axiosClient } from '../../api/axiosClient';
 import { useSocket } from '../../providers/SocketProvider';
 import { STAT_CARD_ROUTES } from '../../utils/superAdminNavigation';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { useSuperAdminContextStore } from '../../store/superAdminContextStore';
 
 const DASHBOARD_CARDS = [
   { key: 'totalHospitals', title: 'Total Hospitals', icon: Building2, color: 'sky', format: (m) => m.totalHospitals },
@@ -45,9 +46,11 @@ const DASHBOARD_CARDS = [
 export const SuperAdminDashboardPage = () => {
   const navigate = useNavigate();
   const { socket } = useSocket();
-  const [metrics, setMetrics] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [pendingCount, setPendingCount] = useState(0);
+  const cachedMetrics = useSuperAdminContextStore((s) => s.platformMetrics);
+  const cachedPendingCount = useSuperAdminContextStore((s) => s.pendingCount);
+  const [metrics, setMetrics] = useState(() => cachedMetrics || null);
+  const [isLoading, setIsLoading] = useState(() => !cachedMetrics);
+  const [pendingCount, setPendingCount] = useState(() => cachedPendingCount || 0);
   const [subAlerts, setSubAlerts] = useState({ expiringSoon: [], trialsExpiringSoon: [] });
 
   const loadDashboardData = async () => {
@@ -60,10 +63,13 @@ export const SuperAdminDashboardPage = () => {
       if (metricsRes.status === 'fulfilled') {
         const payload = metricsRes.value.data?.data || metricsRes.value.data;
         setMetrics(payload);
+        useSuperAdminContextStore.getState().setPlatformMetrics(payload);
       }
       if (pendingRes.status === 'fulfilled') {
         const pendingData = pendingRes.value.data?.data || pendingRes.value.data || [];
-        setPendingCount(Array.isArray(pendingData) ? pendingData.length : 0);
+        const count = Array.isArray(pendingData) ? pendingData.length : 0;
+        setPendingCount(count);
+        useSuperAdminContextStore.getState().setPendingCount(count);
       }
       if (alertsRes.status === 'fulfilled') {
         const alertsData = alertsRes.value.data?.data || alertsRes.value.data || {};
@@ -109,7 +115,7 @@ export const SuperAdminDashboardPage = () => {
   const totalPending = pendingCount;
   const hasAlerts = totalPending > 0 || totalAlerts > 0 || (metrics?.emergencyCases || 0) > 0;
 
-  if (isLoading) {
+  if (isLoading && !metrics) {
     return <div className="flex items-center justify-center h-64 text-slate-500">Loading platform dashboard...</div>;
   }
 

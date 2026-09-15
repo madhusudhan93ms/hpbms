@@ -8,6 +8,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { axiosClient } from '../../api/axiosClient';
 import { formatDate } from '../../utils/formatters';
+import { useSuperAdminContextStore } from '../../store/superAdminContextStore';
 
 const PLAN_COLORS = {
   BASIC: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
@@ -20,30 +21,35 @@ const PLAN_COLORS = {
 
 export const SuperAdminPendingApprovalsPage = () => {
   const navigate = useNavigate();
-  const [hospitals, setHospitals] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedPending = useSuperAdminContextStore((s) => s.pendingApprovals);
+  const [hospitals, setHospitals] = useState(() => cachedPending || []);
+  const [isLoading, setIsLoading] = useState(() => (cachedPending || []).length === 0);
   const [actionMsg, setActionMsg] = useState(null);
   const [processingId, setProcessingId] = useState(null);
 
-  const fetchPending = useCallback(async () => {
-    setIsLoading(true);
+  const fetchPending = useCallback(async (silent = false) => {
+    if (!silent && hospitals.length === 0) setIsLoading(true);
     try {
       const hospRes = await axiosClient.get('/saas/hospitals/pending');
-      setHospitals(hospRes.data?.data || hospRes.data || []);
+      const list = hospRes.data?.data || hospRes.data || [];
+      setHospitals(list);
+      useSuperAdminContextStore.getState().setPendingApprovals(list);
     } catch (err) {
       try {
         const fallback = await axiosClient.get('/saas/hospitals');
         const list = fallback.data?.data || fallback.data || [];
-        setHospitals(list.filter(
+        const filtered = list.filter(
           (h) => !h.isDeleted && (h.status === 'PENDING_APPROVAL' || h.status === 'PENDING')
-        ));
+        );
+        setHospitals(filtered);
+        useSuperAdminContextStore.getState().setPendingApprovals(filtered);
       } catch (e) {
         console.error('Failed to load pending approvals:', e);
       }
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [hospitals.length]);
 
   useEffect(() => { fetchPending(); }, [fetchPending]);
 
@@ -58,6 +64,8 @@ export const SuperAdminPendingApprovalsPage = () => {
       await axiosClient.patch(`/saas/hospitals/${hospital._id}/approve`);
       showMsg(`"${hospital.name}" approved! Admin account provisioned.`, 'success');
       setHospitals((prev) => prev.filter((h) => h._id !== hospital._id));
+      useSuperAdminContextStore.getState().removePendingApproval(hospital._id);
+      useSuperAdminContextStore.getState().updateHospital(hospital._id, { status: 'APPROVED' });
     } catch (err) {
       showMsg(`Failed to approve: ${err?.response?.data?.message || err.message}`, 'error');
     } finally {
@@ -72,6 +80,8 @@ export const SuperAdminPendingApprovalsPage = () => {
       await axiosClient.patch(`/saas/hospitals/${hospital._id}/status`, { status: 'REJECTED' });
       showMsg(`"${hospital.name}" application rejected.`, 'error');
       setHospitals((prev) => prev.filter((h) => h._id !== hospital._id));
+      useSuperAdminContextStore.getState().removePendingApproval(hospital._id);
+      useSuperAdminContextStore.getState().updateHospital(hospital._id, { status: 'REJECTED' });
     } catch (err) {
       showMsg(`Failed to reject: ${err?.response?.data?.message || err.message}`, 'error');
     } finally {
@@ -135,7 +145,7 @@ export const SuperAdminPendingApprovalsPage = () => {
       )}
 
       {/* Loading */}
-      {isLoading ? (
+      {isLoading && hospitals.length === 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {[1, 2, 3].map((i) => (
             <div key={i} className="bg-white rounded-2xl border border-slate-200 p-6 animate-pulse">

@@ -360,9 +360,10 @@ const SubscriptionStatusBar = ({ hospital, onRenewClick }) => {
 export const SuperAdminHospitalDashboard = () => {
   const { hospitalId } = useParams();
   const navigate = useNavigate();
-  const { setSelectedHospital } = useSuperAdminContextStore();
-  const [detail, setDetail] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { setSelectedHospital, setHospitalDetail, getHospitalDetail } = useSuperAdminContextStore();
+  const cachedDetail = getHospitalDetail(hospitalId);
+  const [detail, setDetail] = useState(() => cachedDetail || null);
+  const [isLoading, setIsLoading] = useState(() => !cachedDetail);
 
   // Active Tab & Role Filter State — default ALL to show all 10 staff
   const [activeTab, setActiveTab] = useState('staff');
@@ -432,9 +433,11 @@ export const SuperAdminHospitalDashboard = () => {
   const fetchData = async () => {
     try {
       const res = await axiosClient.get(`/saas/hospitals/${hospitalId}/detail`);
-      setDetail(res.data);
-      if (res.data?.hospital) {
-        setSelectedHospital(hospitalId, res.data.hospital.name);
+      const data = res.data?.data || res.data || res;
+      setDetail(data);
+      setHospitalDetail(hospitalId, data);
+      if (data?.hospital) {
+        setSelectedHospital(hospitalId, data.hospital.name);
       }
     } catch (err) {
       console.error(err);
@@ -447,7 +450,7 @@ export const SuperAdminHospitalDashboard = () => {
     if (hospitalId) fetchData();
   }, [hospitalId]);
 
-  if (isLoading) return <div className="text-center py-16 text-slate-500">Loading hospital overview...</div>;
+  if (isLoading && !detail) return <div className="text-center py-16 text-slate-500">Loading hospital overview...</div>;
   if (!detail) return <div className="text-center py-16 text-red-500">Hospital not found</div>;
 
   const { hospital, stats, staffList = [], patientList = [], branches = [] } = detail;

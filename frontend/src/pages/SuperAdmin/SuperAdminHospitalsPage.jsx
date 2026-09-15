@@ -16,8 +16,8 @@ export const SuperAdminHospitalsPage = () => {
   const statusFilter = searchParams.get('status');
   const tabFilter = searchParams.get('tab') || (statusFilter === 'APPROVED' ? 'ACTIVE' : statusFilter === 'inactive' ? 'EXPIRED' : 'ALL');
 
-  const [hospitals, setHospitals] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [hospitals, setHospitals] = useState(() => useSuperAdminContextStore.getState().hospitals || []);
+  const [isLoading, setIsLoading] = useState(() => (useSuperAdminContextStore.getState().hospitals || []).length === 0);
   const [isDirectCreateOpen, setIsDirectCreateOpen] = useState(false);
   const [isEditCredentialsOpen, setIsEditCredentialsOpen] = useState(false);
   const [editingHospital, setEditingHospital] = useState(null);
@@ -41,25 +41,28 @@ export const SuperAdminHospitalsPage = () => {
 
   useEffect(() => { fetchHospitals(); }, []);
 
-  const fetchHospitals = async () => {
+  const fetchHospitals = async (silent = false) => {
+    if (!silent && hospitals.length === 0) setIsLoading(true);
     try {
       const res = await axiosClient.get('/saas/hospitals/stats');
       const list = res.data?.data || res.data || [];
-      setHospitals(list);
-      useSuperAdminContextStore.getState().setHospitals(
-        (Array.isArray(list) ? list : []).filter((h) => !h.isDeleted && h.status !== 'DELETED')
-      );
+      if (Array.isArray(list) && list.length > 0) {
+        setHospitals(list);
+        useSuperAdminContextStore.getState().setHospitals(list);
+      }
     } catch {
       try {
         const fallback = await axiosClient.get('/saas/hospitals');
         const list = fallback.data?.data || fallback.data || [];
-        setHospitals(list);
-        useSuperAdminContextStore.getState().setHospitals(
-          (Array.isArray(list) ? list : []).filter((h) => !h.isDeleted && h.status !== 'DELETED')
-        );
+        if (Array.isArray(list) && list.length > 0) {
+          setHospitals(list);
+          useSuperAdminContextStore.getState().setHospitals(list);
+        }
       } catch (err) {
         console.error('Failed to load hospitals:', err);
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -89,28 +92,26 @@ export const SuperAdminHospitalsPage = () => {
   const deletedCount = hospitals.filter((h) => h.isDeleted || h.status === 'DELETED').length;
 
   const handleApprove = async (hospitalId, name) => {
-    setIsLoading(true);
     try {
       await axiosClient.patch(`/saas/hospitals/${hospitalId}/approve`);
       setActionMessage(`Hospital '${name}' approved successfully! Initial Admin password generated.`);
-      fetchHospitals();
+      useSuperAdminContextStore.getState().updateHospital(hospitalId, { status: 'APPROVED' });
+      setHospitals((prev) => prev.map((h) => (h._id === hospitalId ? { ...h, status: 'APPROVED' } : h)));
+      fetchHospitals(true);
     } catch (err) {
       setActionMessage(`Failed: ${err.error?.message || err.message}`);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleReject = async (hospitalId, name) => {
-    setIsLoading(true);
     try {
       await axiosClient.patch(`/saas/hospitals/${hospitalId}/status`, { status: 'REJECTED' });
       setActionMessage(`Application for '${name}' rejected.`);
-      fetchHospitals();
+      useSuperAdminContextStore.getState().updateHospital(hospitalId, { status: 'REJECTED' });
+      setHospitals((prev) => prev.map((h) => (h._id === hospitalId ? { ...h, status: 'REJECTED' } : h)));
+      fetchHospitals(true);
     } catch (err) {
       setActionMessage(`Failed: ${err.error?.message || err.message}`);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -118,7 +119,9 @@ export const SuperAdminHospitalsPage = () => {
     const nextStatus = currentStatus === 'SUSPENDED' ? 'APPROVED' : 'SUSPENDED';
     try {
       await axiosClient.patch(`/saas/hospitals/${hospitalId}/status`, { status: nextStatus });
-      fetchHospitals();
+      useSuperAdminContextStore.getState().updateHospital(hospitalId, { status: nextStatus });
+      setHospitals((prev) => prev.map((h) => (h._id === hospitalId ? { ...h, status: nextStatus } : h)));
+      fetchHospitals(true);
     } catch (err) {
       console.error(err);
     }
@@ -126,42 +129,39 @@ export const SuperAdminHospitalsPage = () => {
 
   const handleDeleteHospital = async (hospitalId, name) => {
     if (!window.confirm(`Are you sure you want to delete hospital '${name}'? It can be restored anytime from Deleted Hospitals.`)) return;
-    setIsLoading(true);
     try {
       await axiosClient.patch(`/saas/hospitals/${hospitalId}/delete`);
       setActionMessage(`Hospital '${name}' moved to Deleted Hospitals.`);
-      fetchHospitals();
+      useSuperAdminContextStore.getState().updateHospital(hospitalId, { isDeleted: true, status: 'DELETED' });
+      setHospitals((prev) => prev.map((h) => (h._id === hospitalId ? { ...h, isDeleted: true, status: 'DELETED' } : h)));
+      fetchHospitals(true);
     } catch (err) {
       setActionMessage(`Failed to delete: ${err.error?.message || err.message}`);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleRestoreHospital = async (hospitalId, name) => {
-    setIsLoading(true);
     try {
       await axiosClient.patch(`/saas/hospitals/${hospitalId}/restore`);
       setActionMessage(`Hospital '${name}' restored to Active Hospitals successfully!`);
-      fetchHospitals();
+      useSuperAdminContextStore.getState().updateHospital(hospitalId, { isDeleted: false, status: 'APPROVED' });
+      setHospitals((prev) => prev.map((h) => (h._id === hospitalId ? { ...h, isDeleted: false, status: 'APPROVED' } : h)));
+      fetchHospitals(true);
     } catch (err) {
       setActionMessage(`Failed to restore: ${err.error?.message || err.message}`);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handlePermanentDelete = async (hospitalId, name) => {
     if (!window.confirm(`WARNING: Are you absolutely sure you want to PERMANENTLY delete hospital '${name}'? This will completely wipe all of its branches, departments, users, and transactions from the database immediately. This action CANNOT be undone.`)) return;
-    setIsLoading(true);
     try {
       await axiosClient.delete(`/saas/hospitals/${hospitalId}/permanent`);
       setActionMessage(`Hospital '${name}' and all associated database records permanently deleted.`);
-      fetchHospitals();
+      useSuperAdminContextStore.getState().removeHospital(hospitalId);
+      setHospitals((prev) => prev.filter((h) => h._id !== hospitalId));
+      fetchHospitals(true);
     } catch (err) {
       setActionMessage(`Failed to permanently delete: ${err.error?.message || err.message}`);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -242,8 +242,21 @@ export const SuperAdminHospitalsPage = () => {
       await axiosClient.patch(`/saas/hospitals/${editingHospital._id}/admin-credentials`, payload);
       setActionMessage(`Details and credentials for '${editingHospital.name}' updated successfully!`);
       setIsEditCredentialsOpen(false);
+      useSuperAdminContextStore.getState().updateHospital(editingHospital._id, {
+        name: credentialsForm.hospitalName,
+        contactName: credentialsForm.name,
+        contactEmail: credentialsForm.email,
+        contactPhone: credentialsForm.phone,
+      });
+      setHospitals((prev) => prev.map((h) => (h._id === editingHospital._id ? {
+        ...h,
+        name: credentialsForm.hospitalName,
+        contactName: credentialsForm.name,
+        contactEmail: credentialsForm.email,
+        contactPhone: credentialsForm.phone,
+      } : h)));
       setEditingHospital(null);
-      fetchHospitals();
+      fetchHospitals(true);
     } catch (err) {
       const errorMsg = err.message || err.error?.message || (typeof err === 'string' ? err : 'Failed to update hospital details');
       setActionMessage(`Failed to update hospital details: ${errorMsg}`);
@@ -271,14 +284,28 @@ export const SuperAdminHospitalsPage = () => {
         ...directForm,
         adminPassword: directForm.adminPassword,
       });
-      const approveRes = await axiosClient.patch(`/saas/hospitals/${res.data.hospital._id}/approve`);
+      const createdHospital = res.data?.hospital || res.hospital || {};
+      const approveRes = await axiosClient.patch(`/saas/hospitals/${createdHospital._id}/approve`);
       setProvisionedCreds({
         hospitalName: directForm.hospitalName,
-        adminEmail: approveRes.data.adminUser?.email || directForm.contactEmail,
+        adminEmail: approveRes.data?.adminUser?.email || directForm.contactEmail,
         adminPassword: directForm.adminPassword,
         loginUrl: `${window.location.origin}/login`,
       });
-      fetchHospitals();
+
+      // Add new hospital directly to store and state so it appears immediately!
+      const newHospitalItem = {
+        ...createdHospital,
+        status: 'APPROVED',
+        isDeleted: false,
+        totalStaff: 1,
+        totalPatients: 0,
+        todayRevenue: 0,
+      };
+      useSuperAdminContextStore.getState().addHospital(newHospitalItem);
+      setHospitals((prev) => [newHospitalItem, ...prev.filter((h) => h._id !== newHospitalItem._id)]);
+
+      fetchHospitals(true);
     } catch (err) {
       setModalError(`Failed: ${err.error?.message || err.message}`);
     } finally {

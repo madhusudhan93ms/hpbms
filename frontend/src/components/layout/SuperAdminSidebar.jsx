@@ -10,7 +10,7 @@ let savedSuperAdminSidebarScrollTop = 0;
 
 export const SuperAdminSidebar = ({ isOpen, onClose, drilldownHospitalId = null }) => {
   const location = useLocation();
-  const { selectedHospitalName } = useSuperAdminContextStore();
+  const { selectedHospitalName, pendingCount: storePendingCount, setPendingCount: setStorePendingCount } = useSuperAdminContextStore();
   const { socket } = useSocket();
   const navRef = useRef(null);
 
@@ -52,21 +52,30 @@ export const SuperAdminSidebar = ({ isOpen, onClose, drilldownHospitalId = null 
     if (onClose) onClose();
   };
 
-  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(() => storePendingCount || 0);
+
+  useEffect(() => {
+    if (typeof storePendingCount === 'number') {
+      setPendingCount(storePendingCount);
+    }
+  }, [storePendingCount]);
 
   useEffect(() => {
     const fetchPending = async () => {
       try {
         const res = await axiosClient.get('/saas/hospitals/pending');
-        const list = res.data || [];
-        setPendingCount(Array.isArray(list) ? list.length : 0);
+        const list = res.data?.data || res.data || [];
+        const count = Array.isArray(list) ? list.length : 0;
+        setPendingCount(count);
+        setStorePendingCount(count);
       } catch (err) {
         // fallback
         try {
           const res2 = await axiosClient.get('/saas/hospitals');
-          const list2 = res2.data || [];
+          const list2 = res2.data?.data || res2.data || [];
           const pending = list2.filter((h) => !h.isDeleted && (h.status === 'PENDING_APPROVAL' || h.status === 'PENDING')).length;
           setPendingCount(pending);
+          setStorePendingCount(pending);
         } catch {}
       }
     };
