@@ -108,6 +108,24 @@ export class BillingService {
       status: PAYMENT_STATUS.UNPAID,
     });
 
+    const billingPayload = {
+      invoiceId: invoice._id,
+      invoiceNo: invoice.invoiceNo,
+      patientId: patient._id,
+      patientName: `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'Patient',
+      uhid: patient.uhid || 'N/A',
+      grandTotal: invoice.grandTotal,
+      hospitalId: user.hospitalId,
+      branchId: user.branchId,
+      linkedPath: `/billing/dashboard?tab=CENTRAL_DESK&invoiceId=${invoice._id}`,
+    };
+    socketManager.emitToBranch(user.branchId, 'billing:invoice_created', billingPayload);
+    if (user.hospitalId) {
+      socketManager.emitToHospital(user.hospitalId, 'billing:invoice_created', billingPayload);
+    }
+    socketManager.emitToRole('CASHIER', 'billing:invoice_created', billingPayload);
+    socketManager.emitToRole('BILLING_STAFF', 'billing:invoice_created', billingPayload);
+
     return await Invoice.findById(invoice._id).populate('patientId');
   }
 

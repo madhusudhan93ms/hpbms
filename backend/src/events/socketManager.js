@@ -157,8 +157,15 @@ class SocketManager {
    * NEVER falls back to global broadcast — scoped to branch only.
    */
   emitToBranch(branchId, event, data) {
-    if (this.io && branchId) {
-      this.io.to(`branch_${branchId}`).emit(event, data);
+    if (this.io) {
+      if (branchId) {
+        this.io.to(`branch_${branchId}`).emit(event, data);
+      }
+      const rawHosp = data?.hospitalId?._id || data?.hospitalId || data?.hospital?._id || data?.hospital;
+      if (rawHosp) {
+        this.io.to(`hospital_${rawHosp}`).emit(event, data);
+        this.io.to(`hospital:${rawHosp}`).emit(event, data);
+      }
     }
   }
 
@@ -168,7 +175,9 @@ class SocketManager {
    */
   emitToHospital(hospitalId, event, data) {
     if (this.io && hospitalId) {
-      this.io.to(`hospital_${hospitalId}`).emit(event, data);
+      const rawHosp = hospitalId?._id || hospitalId;
+      this.io.to(`hospital_${rawHosp}`).emit(event, data);
+      this.io.to(`hospital:${rawHosp}`).emit(event, data);
     }
   }
 

@@ -488,12 +488,25 @@ export class EmrService {
       console.error('Failed to resolve nurse tasks on consultation completion:', e);
     }
 
+    const patObj = await Patient.findOne({ _id: appointment.patientId, hospitalId: hospId }).select('firstName lastName uhid').lean();
+    const patientName = patObj ? `${patObj.firstName} ${patObj.lastName}`.trim() : 'Patient';
+    const billingRoute = `/billing/dashboard?tab=CENTRAL_DESK&invoiceId=${invoice._id}`;
+
+    const billingPayload = {
+      invoiceId: invoice._id,
+      invoiceNo,
+      patientId: appointment.patientId,
+      patientName,
+      uhid: patObj?.uhid || 'N/A',
+      doctorName: user.name || 'Doctor',
+      grandTotal: invoice.grandTotal,
+      hospitalId: hospId,
+      branchId: brId,
+      linkedPath: billingRoute,
+    };
+
     // Notify Central Billing Desk (CASHIER / BILLING_STAFF) ONLY if patient is not waiting at pharmacy
     if (!hasPendingPharmacyDispense && !hasPendingNurseAdministration) {
-      const patObj = await Patient.findOne({ _id: appointment.patientId, hospitalId: hospId }).select('firstName lastName uhid').lean();
-      const patientName = patObj ? `${patObj.firstName} ${patObj.lastName}`.trim() : 'Patient';
-      const billingRoute = `/billing/dashboard?tab=CENTRAL_DESK&invoiceId=${invoice._id}`;
-
       await WorkflowEventService.emit(WORKFLOW_EVENTS.CONSULTATION_COMPLETE, {
         hospitalId: hospId,
         branchId: brId,
@@ -506,14 +519,15 @@ export class EmrService {
         grandTotal: invoice.grandTotal,
         linkedPath: billingRoute,
       }, brId);
-
-      socketManager.emitToBranch(brId, isNewInvoice ? 'billing:invoice_created' : 'billing:invoice_updated', {
-        invoiceId: invoice._id,
-        invoiceNo,
-        patientId: appointment.patientId,
-        grandTotal: invoice.grandTotal,
-      });
     }
+
+    const billingEvent = isNewInvoice ? 'billing:invoice_created' : 'billing:invoice_updated';
+    socketManager.emitToBranch(brId, billingEvent, billingPayload);
+    if (hospId) {
+      socketManager.emitToHospital(hospId, billingEvent, billingPayload);
+    }
+    socketManager.emitToRole('CASHIER', billingEvent, billingPayload);
+    socketManager.emitToRole('BILLING_STAFF', billingEvent, billingPayload);
 
     const populatedConsultation = await Consultation.findById(consultation._id)
       .populate('patientId')
