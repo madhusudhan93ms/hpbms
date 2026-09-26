@@ -450,10 +450,66 @@ export const SuperAdminHospitalDashboard = () => {
     if (hospitalId) fetchData();
   }, [hospitalId]);
 
+  // ── Hooks must come before any early returns (Rules of Hooks) ───────────────
+  // detail may be null while loading — use safe empty-array defaults
+  const staffList  = detail?.staffList  ?? [];
+  const patientList = detail?.patientList ?? [];
+
+  const filteredStaff = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    const targetRole = roleFilter !== 'ALL' && roleFilter !== 'ALL_ACTIVE' && roleFilter !== 'ALL_INACTIVE'
+      ? String(roleFilter).toUpperCase()
+      : null;
+
+    return staffList.filter((staff) => {
+      const isActive = staff.isActive || staff.status === 'ACTIVE';
+      if (roleFilter === 'ALL_ACTIVE' && !isActive) return false;
+      if (roleFilter === 'ALL_INACTIVE' && isActive) return false;
+
+      if (targetRole) {
+        const sRole = String(staff.role || '').toUpperCase();
+        const addRoles = (staff.additionalRoles || []).map((r) => String(r).toUpperCase());
+
+        if (targetRole === 'DOCTOR' && !['DOCTOR', 'PHYSICIAN'].includes(sRole) && !addRoles.includes('DOCTOR')) return false;
+        if (targetRole === 'NURSE' && !['NURSE', 'NURSE_INCHARGE'].includes(sRole) && !addRoles.includes('NURSE') && !addRoles.includes('NURSE_INCHARGE')) return false;
+        if (targetRole === 'RECEPTIONIST' && !['RECEPTIONIST', 'RECEPTION', 'FRONT_DESK'].includes(sRole) && !addRoles.includes('RECEPTIONIST')) return false;
+        if (targetRole === 'LAB_TECH' && !['LAB_TECH', 'LABORATORY_STAFF', 'PATHOLOGIST'].includes(sRole) && !addRoles.includes('LAB_TECH')) return false;
+        if (targetRole === 'RADIOLOGIST' && !['RADIOLOGIST', 'RADIOLOGY_STAFF'].includes(sRole) && !addRoles.includes('RADIOLOGIST')) return false;
+        if (targetRole === 'PHARMACIST' && !['PHARMACIST', 'PHARMACY_STAFF'].includes(sRole) && !addRoles.includes('PHARMACIST')) return false;
+        if (targetRole === 'CASHIER' && !['CASHIER', 'BILLING_STAFF', 'ACCOUNTANT'].includes(sRole) && !addRoles.includes('CASHIER')) return false;
+        if (targetRole === 'HOSPITAL_ADMIN' && !['HOSPITAL_ADMIN', 'ADMIN'].includes(sRole) && !addRoles.includes('HOSPITAL_ADMIN')) return false;
+      }
+
+      if (term) {
+        return (
+          (staff.name || '').toLowerCase().includes(term) ||
+          (staff.email || '').toLowerCase().includes(term) ||
+          (staff.role || '').toLowerCase().includes(term) ||
+          (staff.specialization || '').toLowerCase().includes(term)
+        );
+      }
+      return true;
+    });
+  }, [staffList, roleFilter, searchTerm]);
+
+  const filteredPatients = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return patientList;
+    return patientList.filter((patient) => {
+      return (
+        (patient.firstName || '').toLowerCase().includes(term) ||
+        (patient.lastName || '').toLowerCase().includes(term) ||
+        (patient.uhid || '').toLowerCase().includes(term) ||
+        (patient.phone || '').toLowerCase().includes(term)
+      );
+    });
+  }, [patientList, searchTerm]);
+
+  // ── Early returns (after all hooks) ─────────────────────────────────────────
   if (isLoading && !detail) return <div className="text-center py-16 text-slate-500">Loading hospital overview...</div>;
   if (!detail) return <div className="text-center py-16 text-red-500">Hospital not found</div>;
 
-  const { hospital, stats, staffList = [], patientList = [], branches = [] } = detail;
+  const { hospital, stats, branches = [] } = detail;
 
   const handleCardClick = (card) => {
     if (card.viewTab) {
@@ -538,57 +594,8 @@ export const SuperAdminHospitalDashboard = () => {
     }
   };
 
-  const filteredStaff = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    const targetRole = roleFilter !== 'ALL' && roleFilter !== 'ALL_ACTIVE' && roleFilter !== 'ALL_INACTIVE'
-      ? String(roleFilter).toUpperCase()
-      : null;
 
-    return staffList.filter((staff) => {
-      const isActive = staff.isActive || staff.status === 'ACTIVE';
-      if (roleFilter === 'ALL_ACTIVE' && !isActive) return false;
-      if (roleFilter === 'ALL_INACTIVE' && isActive) return false;
-
-      if (targetRole) {
-        const sRole = String(staff.role || '').toUpperCase();
-        const addRoles = (staff.additionalRoles || []).map((r) => String(r).toUpperCase());
-
-        if (targetRole === 'DOCTOR' && !['DOCTOR', 'PHYSICIAN'].includes(sRole) && !addRoles.includes('DOCTOR')) return false;
-        if (targetRole === 'NURSE' && !['NURSE', 'NURSE_INCHARGE'].includes(sRole) && !addRoles.includes('NURSE') && !addRoles.includes('NURSE_INCHARGE')) return false;
-        if (targetRole === 'RECEPTIONIST' && !['RECEPTIONIST', 'RECEPTION', 'FRONT_DESK'].includes(sRole) && !addRoles.includes('RECEPTIONIST')) return false;
-        if (targetRole === 'LAB_TECH' && !['LAB_TECH', 'LABORATORY_STAFF', 'PATHOLOGIST'].includes(sRole) && !addRoles.includes('LAB_TECH')) return false;
-        if (targetRole === 'RADIOLOGIST' && !['RADIOLOGIST', 'RADIOLOGY_STAFF'].includes(sRole) && !addRoles.includes('RADIOLOGIST')) return false;
-        if (targetRole === 'PHARMACIST' && !['PHARMACIST', 'PHARMACY_STAFF'].includes(sRole) && !addRoles.includes('PHARMACIST')) return false;
-        if (targetRole === 'CASHIER' && !['CASHIER', 'BILLING_STAFF', 'ACCOUNTANT'].includes(sRole) && !addRoles.includes('CASHIER')) return false;
-        if (targetRole === 'HOSPITAL_ADMIN' && !['HOSPITAL_ADMIN', 'ADMIN'].includes(sRole) && !addRoles.includes('HOSPITAL_ADMIN')) return false;
-      }
-
-      if (term) {
-        return (
-          (staff.name || '').toLowerCase().includes(term) ||
-          (staff.email || '').toLowerCase().includes(term) ||
-          (staff.role || '').toLowerCase().includes(term) ||
-          (staff.specialization || '').toLowerCase().includes(term)
-        );
-      }
-      return true;
-    });
-  }, [staffList, roleFilter, searchTerm]);
-
-  const filteredPatients = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return patientList;
-    return patientList.filter((patient) => {
-      return (
-        (patient.firstName || '').toLowerCase().includes(term) ||
-        (patient.lastName || '').toLowerCase().includes(term) ||
-        (patient.uhid || '').toLowerCase().includes(term) ||
-        (patient.phone || '').toLowerCase().includes(term)
-      );
-    });
-  }, [patientList, searchTerm]);
-
-  const totalRevenue = stats.totalHospitalRevenue || hospital.totalHospitalRevenue || 0;
+  const totalRevenue = stats?.totalHospitalRevenue || hospital?.totalHospitalRevenue || 0;
 
   const getTableTitle = () => {
     if (roleFilter === 'DOCTOR') return { title: `Doctor Performance & Consultation Reports (${filteredStaff.length})`, icon: Stethoscope, color: 'text-emerald-600' };
