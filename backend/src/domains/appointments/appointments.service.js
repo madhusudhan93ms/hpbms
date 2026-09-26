@@ -3,6 +3,7 @@ import { Patient } from '../../models/Patient.js';
 import { User } from '../../models/User.js';
 import { socketManager } from '../../events/socketManager.js';
 import { WorkflowEventService, WORKFLOW_EVENTS } from '../../events/workflowEventService.js';
+import { NotificationService } from '../notifications/notification.service.js';
 import { ApiError } from '../../utils/apiError.js';
 import { requireBranchContext, requireHospitalContext } from '../../utils/tenantContext.js';
 
@@ -55,9 +56,13 @@ export class AppointmentsService {
     let patient = null;
 
     if (data.patientId) {
-      patient = await Patient.findOne({ _id: data.patientId, hospitalId });
+      patient = await Patient.findOne({ _id: data.patientId, hospitalId })
+        .select(this.PATIENT_SAFE_FIELDS)
+        .lean({ getters: true });
     } else if (data.uhid) {
-      patient = await Patient.findOne({ hospitalId, uhid: data.uhid.toUpperCase() });
+      patient = await Patient.findOne({ hospitalId, uhid: data.uhid.toUpperCase() })
+        .select(this.PATIENT_SAFE_FIELDS)
+        .lean({ getters: true });
     }
     if (!patient) {
       const count = await Patient.countDocuments({ hospitalId });
@@ -146,19 +151,28 @@ export class AppointmentsService {
       linkedPath: `/doctor/dashboard?tab=LIVE&appointmentId=${appointment._id}&patientId=${patient._id}`,
     }, branchId || doctor.branchId);
 
-    return await Appointment.findById(appointment._id).populate('patientId', this.PATIENT_SAFE_FIELDS).populate('doctorId', this.DOCTOR_SAFE_FIELDS);
+    return await Appointment.findById(appointment._id)
+      .populate('patientId', this.PATIENT_SAFE_FIELDS)
+      .populate('doctorId', this.DOCTOR_SAFE_FIELDS)
+      .lean({ getters: true });
   }
 
   static async generateOpdToken(data, user) {
     const hospitalId = requireHospitalContext(user);
     const branchId = data.branchId || user?.branchId;
 
-    const patient = await Patient.findOne({ _id: data.patientId, hospitalId });
+    const [patient, doctor] = await Promise.all([
+      Patient.findOne({ _id: data.patientId, hospitalId })
+        .select('firstName lastName uhid')
+        .lean(),
+      User.findOne({ _id: data.doctorId, hospitalId, role: 'DOCTOR' })
+        .select('name cabinNo departmentId branchId consultationFee')
+        .lean(),
+    ]);
+
     if (!patient) {
       throw new ApiError(404, 'Patient record not found', null, 'NOT_FOUND');
     }
-
-    const doctor = await User.findOne({ _id: data.doctorId, hospitalId, role: 'DOCTOR' });
     if (!doctor) {
       throw new ApiError(404, 'Doctor not found in this hospital', null, 'NOT_FOUND');
     }
@@ -230,7 +244,8 @@ export class AppointmentsService {
 
     return await Appointment.findById(appointment._id)
       .populate('patientId', this.PATIENT_SAFE_FIELDS)
-      .populate('doctorId', this.DOCTOR_SAFE_FIELDS);
+      .populate('doctorId', this.DOCTOR_SAFE_FIELDS)
+      .lean({ getters: true });
   }
 
   static async getOpdQueue(user, doctorId = null) {
@@ -250,7 +265,8 @@ export class AppointmentsService {
     return await Appointment.find(filter)
       .populate('patientId', this.PATIENT_SAFE_FIELDS)
       .populate('doctorId', this.DOCTOR_SAFE_FIELDS)
-      .sort(FIFO_QUEUE_SORT);
+      .sort(FIFO_QUEUE_SORT)
+      .lean({ getters: true });
   }
 
   static async updateTokenStatus(appointmentId, status, user) {
@@ -304,7 +320,6 @@ export class AppointmentsService {
         }, appointment.branchId);
       }
       try {
-        const { NotificationService } = await import('../notifications/notification.service.js');
         await NotificationService.completeEntityTasks({
           hospitalId,
           entityType: 'Appointment',

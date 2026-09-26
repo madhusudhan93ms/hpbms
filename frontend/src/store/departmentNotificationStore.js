@@ -2,9 +2,12 @@ import { create } from 'zustand';
 import { axiosClient } from '../api/axiosClient';
 import { useNotificationStore } from './notificationStore';
 
+const cleanPathCache = new Map();
 // Strips protocol, host, and tenant prefix (e.g. /test-hospital-1/)
 export const cleanPath = (raw) => {
   if (!raw) return '';
+  const cached = cleanPathCache.get(raw);
+  if (cached !== undefined) return cached;
   let p = raw.trim();
   // Strip protocol and host if present
   try {
@@ -17,6 +20,8 @@ export const cleanPath = (raw) => {
   // Strip tenant prefix: /tenant-name/(doctor|reception|nursing|nurse-incharge|admin|hospital-admin|billing|pharmacy|laboratory|radiology|emergency)
   // Ensure the section name is bounded by '/', '?', or end of string so '/admin/doctors-management' doesn't match 'doctor'
   p = p.replace(/^\/[^/]+(?=\/(?:doctor|reception|nursing|nurse-incharge|admin|hospital-admin|billing|pharmacy|laboratory|radiology|emergency)(?:\/|$|\?))/, '');
+  if (cleanPathCache.size > 500) cleanPathCache.clear();
+  cleanPathCache.set(raw, p);
   return p;
 };
 

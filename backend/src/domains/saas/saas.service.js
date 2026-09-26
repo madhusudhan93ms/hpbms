@@ -492,28 +492,59 @@ export class SaasService {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Fetch invoices for revenue calculations
-    const invoices = await Invoice.find({ hospitalId: hospital._id }).lean();
-    const totalHospitalRevenue = invoices.reduce((sum, inv) => sum + (inv.paidAmount || inv.grandTotal || 0), 0);
+    // Fetch invoices, consultations, and appointments concurrently with minimal field projections
+    const [invoices, consultations, appointments] = await Promise.all([
+      Invoice.find({ hospitalId: hospital._id }).select('paidAmount grandTotal doctorId createdBy cashierId').lean(),
+      Consultation.find({ hospitalId: hospital._id }).select('doctorId').lean(),
+      Appointment.find({ hospitalId: hospital._id }).select('createdBy receptionistId').lean(),
+    ]);
 
-    const consultations = await Consultation.find({ hospitalId: hospital._id }).lean();
-    const appointments = await Appointment.find({ hospitalId: hospital._id }).lean();
+    let totalHospitalRevenue = 0;
+    const doctorRevenueMap = new Map();
+    const staffRevenueMap = new Map();
+    for (const inv of invoices) {
+      const amount = inv.paidAmount || inv.grandTotal || 0;
+      totalHospitalRevenue += amount;
+      if (inv.doctorId) {
+        const docId = String(inv.doctorId);
+        doctorRevenueMap.set(docId, (doctorRevenueMap.get(docId) || 0) + amount);
+      }
+      const staffId = inv.createdBy || inv.cashierId;
+      if (staffId) {
+        const sId = String(staffId);
+        staffRevenueMap.set(sId, (staffRevenueMap.get(sId) || 0) + amount);
+      }
+    }
+
+    const doctorConsultationCounts = new Map();
+    for (const c of consultations) {
+      if (c.doctorId) {
+        const docId = String(c.doctorId);
+        doctorConsultationCounts.set(docId, (doctorConsultationCounts.get(docId) || 0) + 1);
+      }
+    }
+
+    const receptionistAppointmentCounts = new Map();
+    for (const a of appointments) {
+      const recId = a.createdBy || a.receptionistId;
+      if (recId) {
+        const rId = String(recId);
+        receptionistAppointmentCounts.set(rId, (receptionistAppointmentCounts.get(rId) || 0) + 1);
+      }
+    }
 
     const staffList = rawStaff.map((s) => {
+      const sId = String(s._id);
       let patientsHandled = 0;
       let revenueGenerated = 0;
 
       if (s.role === ROLES.DOCTOR) {
-        patientsHandled = consultations.filter((c) => String(c.doctorId) === String(s._id)).length;
-        revenueGenerated = invoices
-          .filter((inv) => String(inv.doctorId) === String(s._id))
-          .reduce((sum, inv) => sum + (inv.paidAmount || inv.grandTotal || 0), 0);
+        patientsHandled = doctorConsultationCounts.get(sId) || 0;
+        revenueGenerated = doctorRevenueMap.get(sId) || 0;
       } else if (s.role === ROLES.RECEPTIONIST) {
-        patientsHandled = appointments.filter((a) => String(a.createdBy || a.receptionistId) === String(s._id)).length;
+        patientsHandled = receptionistAppointmentCounts.get(sId) || 0;
       } else {
-        revenueGenerated = invoices
-          .filter((inv) => String(inv.createdBy || inv.cashierId) === String(s._id))
-          .reduce((sum, inv) => sum + (inv.paidAmount || inv.grandTotal || 0), 0);
+        revenueGenerated = staffRevenueMap.get(sId) || 0;
       }
 
       return {

@@ -195,14 +195,29 @@ export class AuthService {
       activateAuthTenant(targetHospital);
     }
 
+    const safeEscapedId = cleanId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const idRegex = new RegExp(`^${safeEscapedId}$`, 'i');
+
+    const searchQueries = [
+      { loginIds: cleanId },
+      { loginIds: idRegex },
+      { email: cleanId.toLowerCase() },
+      { email: idRegex },
+      { phone: cleanId },
+      { employeeId: cleanId },
+      { employeeId: cleanId.toUpperCase() },
+      { employeeId: cleanId.toLowerCase() },
+      { employeeId: idRegex },
+      { uhid: cleanId.toUpperCase() },
+      { uhid: idRegex },
+    ];
+
+    if (mongoose.Types.ObjectId.isValid(cleanId)) {
+      searchQueries.push({ _id: cleanId });
+    }
+
     let candidates = await User.find({
-      $or: [
-        { loginIds: cleanId },
-        { email: cleanId.toLowerCase() },
-        { phone: cleanId },
-        { employeeId: cleanId.toUpperCase() },
-        { uhid: cleanId.toUpperCase() },
-      ],
+      $or: searchQueries,
     })
       .select('+passwordHash +failedLoginAttempts +lockUntil')
       .populate('hospitalId')
@@ -230,6 +245,10 @@ export class AuthService {
       candidates = domainCandidates;
     }
 
+    if (candidates.length === 0) {
+      throw new ApiError(401, 'No user account found matching this Staff ID, Email, or Phone number.', null, 'USER_NOT_FOUND');
+    }
+
     // PRIORITIZE STAFF AND ADMIN ROLES OVER PATIENT / GUARDIAN ROLES
     const STAFF_ROLES = [
       'SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'NURSE_INCHARGE',
@@ -248,27 +267,39 @@ export class AuthService {
     if (candidates.length > 0) {
       const lockCandidate = candidates[0];
       if (lockCandidate.lockUntil && lockCandidate.lockUntil > new Date()) {
-        const remainingMins = Math.ceil((lockCandidate.lockUntil - Date.now()) / 60000);
-        throw new ApiError(403, `Account is temporarily locked due to repeated failed login attempts. Please try again in ${remainingMins} minutes.`, null, 'ACCOUNT_LOCKED');
+        const remainingSecs = Math.max(1, Math.ceil((lockCandidate.lockUntil.getTime() - Date.now()) / 1000));
+        const timeMsg = remainingSecs < 60 ? `${remainingSecs} seconds` : `${Math.ceil(remainingSecs / 60)} minute(s)`;
+        throw new ApiError(403, `Account is temporarily locked due to multiple failed login attempts. Please try again after ${timeMsg}.`, null, 'ACCOUNT_LOCKED');
+      } else if (lockCandidate.lockUntil && lockCandidate.lockUntil <= new Date()) {
+        lockCandidate.failedLoginAttempts = 0;
+        lockCandidate.lockUntil = null;
+        await lockCandidate.save().catch(() => {});
       }
     }
 
     let user = null;
+    let failedAttempts = 0;
     for (const candidate of candidates) {
       if (await candidate.comparePassword(password)) {
         user = candidate;
         break;
       } else {
         candidate.failedLoginAttempts = (candidate.failedLoginAttempts || 0) + 1;
+        failedAttempts = candidate.failedLoginAttempts;
         if (candidate.failedLoginAttempts >= 5) {
-          candidate.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // Lock for 15 minutes
+          candidate.lockUntil = new Date(Date.now() + 30 * 1000); // Lock for 30 seconds
         }
         await candidate.save().catch(() => {});
       }
     }
 
     if (!user) {
-      throw new ApiError(401, 'Invalid email, phone, UHID, or password credentials', null, 'INVALID_CREDENTIALS');
+      if (failedAttempts >= 5) {
+        throw new ApiError(403, 'Account is temporarily locked due to multiple failed login attempts. Please try again after 30 seconds.', null, 'ACCOUNT_LOCKED');
+      }
+      const attemptsLeft = Math.max(0, 5 - failedAttempts);
+      const remainingHint = attemptsLeft > 0 ? ` (${attemptsLeft} attempt${attemptsLeft > 1 ? 's' : ''} remaining before account lock)` : '';
+      throw new ApiError(401, `Incorrect password entered for this Staff ID / Account.${remainingHint}`, null, 'INCORRECT_PASSWORD');
     }
 
     if (!user.isActive) {
@@ -277,6 +308,7 @@ export class AuthService {
 
     user.failedLoginAttempts = 0;
     user.lockUntil = null;
+    await user.save().catch(() => {});
 
     return await this.formatAuthResponse(user);
   }
@@ -302,9 +334,12 @@ export class AuthService {
       activateAuthTenant(hosp);
     }
 
+    const safeEscapedMobile = cleanMobile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const phoneQueries = [
       { phone: cleanMobile },
-      { phone: { $regex: cleanMobileDigits, $options: 'i' } }
+      { phone: { $regex: cleanMobileDigits, $options: 'i' } },
+      { uhid: cleanMobile.toUpperCase() },
+      { uhid: { $regex: `^${safeEscapedMobile}$`, $options: 'i' } },
     ];
     if (cleanMobileDigits.length >= 6) {
       phoneQueries.push({ phone: { $regex: cleanMobileDigits.slice(-7), $options: 'i' } });
@@ -318,12 +353,12 @@ export class AuthService {
     let patients = await Patient.find(patientQuery).populate('hospitalId').populate('branchId');
 
     if (!patients || patients.length === 0) {
-      throw new ApiError(401, 'No patient registered with this mobile number.', null, 'INVALID_CREDENTIALS');
+      throw new ApiError(401, `No registered patient found matching Mobile Number or UHID '${cleanMobile}'. Please check your input or contact reception.`, null, 'PATIENT_NOT_FOUND');
     }
 
     const inputDobDate = new Date(dob);
     if (isNaN(inputDobDate.getTime())) {
-      throw new ApiError(400, 'Invalid Date of Birth format.', null, 'VALIDATION_ERROR');
+      throw new ApiError(400, 'Invalid Date of Birth format. Please select a valid date.', null, 'VALIDATION_ERROR');
     }
     const inputDobStr = inputDobDate.toISOString().split('T')[0];
 
@@ -336,7 +371,7 @@ export class AuthService {
     });
 
     if (!matchedPatient) {
-      throw new ApiError(401, 'Date of Birth (DOB) does not match patient records.', null, 'INVALID_CREDENTIALS');
+      throw new ApiError(401, 'Date of Birth (DOB) does not match our records for this patient. Please verify your date of birth.', null, 'DOB_MISMATCH');
     }
 
     // Look up existing user strictly with role 'PATIENT' to prevent accidental admin/staff collision
@@ -421,7 +456,7 @@ export class AuthService {
     }).populate('hospitalId').populate('branchId');
 
     if (!patient) {
-      throw new ApiError(401, `No patient found with Patient Number (UHID) '${cleanUHID}'.`, null, 'INVALID_CREDENTIALS');
+      throw new ApiError(401, `No patient record found with Patient UHID '${cleanUHID}'. Please verify the UHID number.`, null, 'UHID_NOT_FOUND');
     }
 
     const inputGuardianDigits = normalizedPhone(cleanGuardian);
@@ -429,10 +464,10 @@ export class AuthService {
     const guardianMatched = phonesMatch(patient.emergencyContact?.phone, cleanGuardian);
 
     if (!patientMatched) {
-      throw new ApiError(401, 'Patient Mobile Number does not match the record for this UHID.', null, 'INVALID_CREDENTIALS');
+      throw new ApiError(401, `Patient Mobile Number does not match the registered mobile for UHID '${cleanUHID}'.`, null, 'PATIENT_PHONE_MISMATCH');
     }
     if (!guardianMatched) {
-      throw new ApiError(401, 'Guardian Mobile Number does not match the registered emergency contact.', null, 'INVALID_CREDENTIALS');
+      throw new ApiError(401, 'Guardian Mobile Number does not match the registered emergency contact for this patient.', null, 'GUARDIAN_PHONE_MISMATCH');
     }
 
     // Look up existing Guardian user by phone, role, and hospital
@@ -593,18 +628,26 @@ export class AuthService {
     const status = data.status || 'ACTIVE';
     const isActive = status === 'ACTIVE';
 
+    const cleanEmployeeId = data.employeeId ? String(data.employeeId).trim() : '';
+    const loginIds = [
+      data.email.toLowerCase().trim(),
+      ...(cleanPhone ? [cleanPhone] : []),
+      ...(cleanEmployeeId ? [cleanEmployeeId, cleanEmployeeId.toUpperCase(), cleanEmployeeId.toLowerCase()] : []),
+    ];
+
     const newUser = await User.create({
       hospitalId,
       branchId,
       name: data.name,
       email: data.email.toLowerCase().trim(),
       phone: cleanPhone,
+      loginIds,
       passwordHash,
       role: data.role || 'DOCTOR',
       additionalRoles: Array.isArray(data.additionalRoles) ? data.additionalRoles : [],
       departmentId: data.departmentId || undefined,
       additionalDepartments: Array.isArray(data.additionalDepartments) ? data.additionalDepartments : [],
-      employeeId: data.employeeId || '',
+      employeeId: cleanEmployeeId,
       designation: data.designation || '',
       assignedUnit: data.assignedUnit || '',
       shiftDetails: data.shiftDetails || '',
@@ -633,7 +676,7 @@ export class AuthService {
       }
     }
 
-    const staffDoc = await User.findOne(this.staffManagementFilter(staffId, adminUser)).select('+passwordHash +passwordResetToken +passwordResetExpires');
+    const staffDoc = await User.findOne(this.staffManagementFilter(staffId, adminUser)).select('+passwordHash +passwordResetToken +passwordResetExpires +failedLoginAttempts +lockUntil');
     if (!staffDoc) {
       throw new ApiError(404, 'Staff user account not found', null, 'NOT_FOUND');
     }
@@ -642,6 +685,8 @@ export class AuthService {
     staffDoc.assignedPasswordHint = '';
     staffDoc.passwordResetToken = null;
     staffDoc.passwordResetExpires = null;
+    staffDoc.failedLoginAttempts = 0;
+    staffDoc.lockUntil = null;
     await staffDoc.save();
 
 
@@ -786,6 +831,25 @@ export class AuthService {
       defaultRoute = roleDoc.defaultRoute;
     }
 
+    const activeAdditionalRoles = new Set(Array.isArray(user.additionalRoles) ? user.additionalRoles : []);
+    if (user.role === 'HOSPITAL_ADMIN' && user.isAvailable !== false && user.adminDepartmentAvailability) {
+      const roleMap = {
+        DOCTOR: ['DOCTOR'],
+        RECEPTIONIST: ['RECEPTIONIST', 'OPD_STAFF'],
+        CASHIER: ['CASHIER', 'BILLING_STAFF'],
+        PHARMACIST: ['PHARMACIST', 'PHARMACY_STAFF'],
+        LAB_TECH: ['LAB_TECH', 'LABORATORY_STAFF'],
+        RADIOLOGIST: ['RADIOLOGIST', 'RADIOLOGY_STAFF'],
+        NURSE: ['NURSE', 'NURSE_INCHARGE', 'IPD_STAFF'],
+        EMERGENCY_STAFF: ['EMERGENCY_STAFF'],
+      };
+      for (const [dept, isEnabled] of Object.entries(user.adminDepartmentAvailability)) {
+        if (isEnabled && roleMap[dept]) {
+          roleMap[dept].forEach((r) => activeAdditionalRoles.add(r));
+        }
+      }
+    }
+
     return {
       id: user._id,
       name: user.name,
@@ -793,7 +857,7 @@ export class AuthService {
       phone: user.phone,
       uhid: user.uhid,
       role: user.role,
-      additionalRoles: user.additionalRoles || [],
+      additionalRoles: Array.from(activeAdditionalRoles),
       additionalDepartments: user.additionalDepartments || [],
       status: user.status || (user.isActive ? 'ACTIVE' : 'INACTIVE'),
       isActive: user.isActive,

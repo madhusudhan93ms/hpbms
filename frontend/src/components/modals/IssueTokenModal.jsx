@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { axiosClient } from '../../api/axiosClient';
@@ -60,7 +60,10 @@ export const IssueTokenModal = ({ isOpen, onClose, onSuccess, initialPatient = n
 
   const fetchPatientsAndDoctors = async () => {
     try {
-      const pRes = await axiosClient.get('/patients');
+      const [pRes, sRes] = await Promise.all([
+        axiosClient.get('/patients'),
+        axiosClient.get('/auth/staff'),
+      ]);
       const allPatients = pRes.data || [];
       setPatients(allPatients);
 
@@ -74,7 +77,6 @@ export const IssueTokenModal = ({ isOpen, onClose, onSuccess, initialPatient = n
         }
       }
 
-      const sRes = await axiosClient.get('/auth/staff');
       const allDocs = (sRes.data || []).filter(
         (s) =>
           (s.role === 'DOCTOR' ||
@@ -98,15 +100,24 @@ export const IssueTokenModal = ({ isOpen, onClose, onSuccess, initialPatient = n
 
   if (!isOpen) return null;
 
-  const filteredPatients = searchQuery.trim()
-    ? patients.filter((p) =>
-        p.uhid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : [];
+  const filteredPatients = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return patients
+      .filter((p) => {
+        const uhid = (p.uhid || '').toLowerCase();
+        if (uhid.includes(q)) return true;
+        const phone = (p.phone || '').toLowerCase();
+        if (phone.includes(q)) return true;
+        const name = `${p.firstName || ''} ${p.lastName || ''}`.toLowerCase();
+        return name.includes(q);
+      })
+      .slice(0, 50);
+  }, [patients, searchQuery]);
 
-  const selectedDoctor = doctors.find((d) => d._id === selectedDoctorId);
+  const selectedDoctor = useMemo(() => {
+    return doctors.find((d) => String(d._id) === String(selectedDoctorId));
+  }, [doctors, selectedDoctorId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -259,9 +270,18 @@ export const IssueTokenModal = ({ isOpen, onClose, onSuccess, initialPatient = n
     printWindow.document.close();
   };
 
-  const resolvedPatient = issuedToken ? ((typeof issuedToken.patientId === 'object' && issuedToken.patientId) ? issuedToken.patientId : (selectedPatient || {})) : null;
-  const resolvedPatName = resolvedPatient?.firstName ? `${resolvedPatient.firstName} ${resolvedPatient.lastName || ''}`.trim() : (issuedToken?.patientName || 'Patient');
-  const resolvedDoctorName = issuedToken?.doctorId?.name ? `Dr. ${issuedToken.doctorId.name.replace(/^Dr\.\s*/i, '')}` : (selectedDoctor?.name ? `Dr. ${selectedDoctor.name.replace(/^Dr\.\s*/i, '')}` : 'Assigned Doctor');
+  const resolvedPatient = useMemo(() => {
+    if (!issuedToken) return null;
+    return (typeof issuedToken.patientId === 'object' && issuedToken.patientId) ? issuedToken.patientId : (selectedPatient || {});
+  }, [issuedToken, selectedPatient]);
+
+  const resolvedPatName = useMemo(() => {
+    return resolvedPatient?.firstName ? `${resolvedPatient.firstName} ${resolvedPatient.lastName || ''}`.trim() : (issuedToken?.patientName || 'Patient');
+  }, [resolvedPatient, issuedToken]);
+
+  const resolvedDoctorName = useMemo(() => {
+    return issuedToken?.doctorId?.name ? `Dr. ${issuedToken.doctorId.name.replace(/^Dr\.\s*/i, '')}` : (selectedDoctor?.name ? `Dr. ${selectedDoctor.name.replace(/^Dr\.\s*/i, '')}` : 'Assigned Doctor');
+  }, [issuedToken, selectedDoctor]);
 
   const hospObj = user?.hospitalId || user?.hospital || {};
   const hospName = hospObj?.name || user?.hospitalName || 'Test Hospital Main Campus';

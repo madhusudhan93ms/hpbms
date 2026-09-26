@@ -15,7 +15,7 @@ const colorMap = {
   default: { bg: 'bg-slate-100',  text: 'text-slate-600',   border: 'border-slate-200'   },
 };
 
-export const StatCard = ({ title, value, subtitle, icon: Icon, color = 'default', trend, onClick, className = '' }) => {
+export const StatCard = React.memo(({ title, value, subtitle, icon: Icon, color = 'default', trend, onClick, className = '' }) => {
   const scheme = colorMap[color] || colorMap.default;
 
   return (
@@ -56,4 +56,6 @@ export const StatCard = ({ title, value, subtitle, icon: Icon, color = 'default'
       )}
     </Card>
   );
-};
+});
+
+StatCard.displayName = 'StatCard';

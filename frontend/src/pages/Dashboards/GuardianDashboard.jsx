@@ -27,6 +27,20 @@ import {
   X,
 } from 'lucide-react';
 
+const DEFAULT_PERMISSIONS = {
+  patientOverview: true,
+  treatmentHistory: true,
+  doctorUpdates: true,
+  billing: true,
+  patientRequests: true,
+};
+
+const GUARDIAN_TABS = [
+  { key: 'dashboard', label: 'Treatment History & Overview', icon: Clock },
+  { key: 'doctor-updates', label: 'Doctor Progress Notes', icon: Stethoscope },
+  { key: 'care-team', label: 'Assigned Care Team', icon: Users },
+];
+
 export const GuardianDashboard = ({ activeTab = 'dashboard' }) => {
   const { user } = useAuthStore();
   const [currentTab, setCurrentTab] = useState(activeTab);
@@ -160,16 +174,18 @@ export const GuardianDashboard = ({ activeTab = 'dashboard' }) => {
     }
   };
 
-  const patientSummary = guardianData?.patientSummary || {};
-  const careTeam = patientSummary.careTeam || {};
-  const doctorUpdates = guardianData?.doctorUpdates || [];
-  const permissions = guardianData?.permissions || {
-    patientOverview: true,
-    treatmentHistory: true,
-    doctorUpdates: true,
-    billing: true,
-    patientRequests: true,
-  };
+  const { patientSummary, careTeam, doctorUpdates, permissions } = React.useMemo(() => {
+    const ps = guardianData?.patientSummary || {};
+    const ct = ps.careTeam || {};
+    const du = guardianData?.doctorUpdates || [];
+    const perm = guardianData?.permissions || DEFAULT_PERMISSIONS;
+    return {
+      patientSummary: ps,
+      careTeam: ct,
+      doctorUpdates: du,
+      permissions: perm,
+    };
+  }, [guardianData]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -267,11 +283,7 @@ export const GuardianDashboard = ({ activeTab = 'dashboard' }) => {
 
       {/* Sub-Tab Navigation Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 text-xs font-bold scrollbar-none">
-        {[
-          { key: 'dashboard', label: 'Treatment History & Overview', icon: Clock },
-          { key: 'doctor-updates', label: 'Doctor Progress Notes', icon: Stethoscope },
-          { key: 'care-team', label: 'Assigned Care Team', icon: Users },
-        ].map((tab) => {
+        {GUARDIAN_TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.key;
           return (

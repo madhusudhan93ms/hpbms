@@ -51,5 +51,6 @@ const branchSchema = new mongoose.Schema(
 );
 
 branchSchema.index({ hospitalId: 1, branchCode: 1 }, { unique: true });
+branchSchema.index({ hospitalId: 1, isMainBranch: -1, createdAt: 1 });
 
 export const Branch = tenantAwareModel(mongoose.model('Branch', branchSchema));

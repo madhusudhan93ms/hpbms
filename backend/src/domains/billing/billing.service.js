@@ -31,38 +31,52 @@ export class BillingService {
         { 'doctorReviewQuery.resolved': { $ne: false } },
       ],
     })
-      .populate('patientId')
+      .populate('patientId', 'firstName lastName uhid phone age gender')
       .populate('doctorId', 'name specialization cabinNo')
+      .populate({
+        path: 'consultationId',
+        populate: { path: 'doctorId', select: 'name specialization cabinNo' },
+      })
       .sort({ createdAt: 1 });
 
-    // Attach consultation data to each invoice
-    const enriched = await Promise.all(
-      invoices.map(async (inv) => {
-        const filter = { patientId: inv.patientId?._id || inv.patientId };
-        if (inv.doctorId) {
-          filter.doctorId = inv.doctorId._id || inv.doctorId;
-        }
+    // For any legacy invoices without an explicit consultationId reference, batch lookup consultations in one query
+    const missingPatientIds = invoices
+      .filter((inv) => !inv.consultationId && (inv.patientId?._id || inv.patientId))
+      .map((inv) => inv.patientId._id || inv.patientId);
 
-        let consultation = await Consultation.findOne(filter)
-          .populate('doctorId', 'name specialization cabinNo')
-          .sort({ createdAt: -1 });
-
-        if (!consultation && inv.patientId) {
-          consultation = await Consultation.findOne({ patientId: inv.patientId._id || inv.patientId })
-            .populate('doctorId', 'name specialization cabinNo')
-            .sort({ createdAt: -1 });
-        }
-
-        if (consultation) consultation = consultation.toObject();
-
-        return {
-          ...inv.toObject(),
-          consultation: consultation || null,
-        };
+    const fallbackConsultationMap = new Map();
+    if (missingPatientIds.length > 0) {
+      const fallbackConsultations = await Consultation.find({
+        hospitalId,
+        patientId: { $in: missingPatientIds },
       })
-    );
+        .populate('doctorId', 'name specialization cabinNo')
+        .sort({ createdAt: -1 });
 
-    return enriched;
+      for (const c of fallbackConsultations) {
+        const key = String(c.patientId?._id || c.patientId);
+        if (!fallbackConsultationMap.has(key)) {
+          fallbackConsultationMap.set(key, c);
+        }
+      }
+    }
+
+    return invoices.map((inv) => {
+      let consultation = inv.consultationId || null;
+      if (!consultation && inv.patientId) {
+        const key = String(inv.patientId._id || inv.patientId);
+        consultation = fallbackConsultationMap.get(key) || null;
+      }
+
+      if (consultation && typeof consultation.toObject === 'function') {
+        consultation = consultation.toObject();
+      }
+
+      return {
+        ...inv.toObject(),
+        consultation: consultation || null,
+      };
+    });
   }
 
   /**

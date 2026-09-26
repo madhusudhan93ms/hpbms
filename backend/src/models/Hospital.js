@@ -163,6 +163,10 @@ hospitalSchema.index({ domain: 1, isDeleted: 1 });
 hospitalSchema.index({ subdomain: 1, isDeleted: 1 });
 hospitalSchema.index({ status: 1, isDeleted: 1 });
 hospitalSchema.index({ code: 1, isDeleted: 1 });
+hospitalSchema.index({ storageMode: 1, databaseMigrationStatus: 1 });
+hospitalSchema.index({ isDeleted: 1, createdAt: -1 });
+hospitalSchema.index({ isDeleted: 1, status: 1, createdAt: -1 });
+hospitalSchema.index({ contactEmail: 1, isDeleted: 1 });
 
 hospitalSchema.pre('validate', function assignImmutableDatabaseKey(next) {
   if (!this.databaseKey && this._id) this.databaseKey = `tenant_${this._id.toString().toLowerCase()}`;

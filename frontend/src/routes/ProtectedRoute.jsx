@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { getEffectiveUserRoles } from '../components/auth/TenantRouteGuard';
 
 const checkModulePermission = (permissions, currentModule) => {
   if (!permissions) return false;
@@ -66,11 +67,8 @@ export const ProtectedRoute = ({ allowedRoles = [] }) => {
   ];
   const currentModule = !isAdminRoute ? routeModules.find(([prefix]) => location.pathname.includes(prefix))?.[1] : null;
 
-  const userRoles = [
-    user?.role,
-    ...(Array.isArray(user?.additionalRoles) ? user.additionalRoles : []),
-  ].filter(Boolean);
-  const additionalRoles = Array.isArray(user?.additionalRoles) ? user.additionalRoles : [];
+  const userRoles = getEffectiveUserRoles(user);
+  const additionalRoles = userRoles.filter((r) => r !== user?.role);
   const operationalAllowedRoles = allowedRoles.filter((role) => !['HOSPITAL_ADMIN', 'SUPER_ADMIN'].includes(role));
 
   const isSuperAdmin = userRoles.includes('SUPER_ADMIN');

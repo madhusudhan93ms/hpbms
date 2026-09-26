@@ -29,7 +29,7 @@ export class EmrService {
       hospitalId,
       appointmentId: appointment._id,
       chargeStatus: { $ne: 'CANCELLED' },
-    });
+    }).lean({ getters: true });
 
     const consultationFee = data.consultationFee !== undefined && data.consultationFee !== null && data.consultationFee !== ''
       ? Number(data.consultationFee)
@@ -87,8 +87,10 @@ export class EmrService {
     let prescription = null;
     let nurseTasks = [];
     if (sanitizedPrescriptions.length > 0) {
-      const rxCount = await Prescription.countDocuments({ hospitalId: hospId });
-      const hospitalDoc = await Hospital.findById(hospId).select('code').lean().catch(() => null);
+      const [rxCount, hospitalDoc] = await Promise.all([
+        Prescription.countDocuments({ hospitalId: hospId }),
+        Hospital.findById(hospId).select('code').lean().catch(() => null),
+      ]);
       const hospCode = hospitalDoc?.code ? `${hospitalDoc.code}-` : '';
       let rxNo = `RX-${hospCode}${new Date().getFullYear()}-${String(rxCount + 1).padStart(5, '0')}`;
 
@@ -230,14 +232,16 @@ export class EmrService {
         hospitalId: hospId,
         patientId: appointment.patientId,
       }).select('_id').lean();
-      for (const inv of pendingInvoices) {
-        await NotificationService.completeEntityTasks({
-          hospitalId: hospId,
-          entityId: inv._id,
-          relatedPatientId: appointment.patientId,
-          targetModule: 'doctor',
-        });
-      }
+      await Promise.all(
+        pendingInvoices.map((inv) =>
+          NotificationService.completeEntityTasks({
+            hospitalId: hospId,
+            entityId: inv._id,
+            relatedPatientId: appointment.patientId,
+            targetModule: 'doctor',
+          })
+        )
+      );
     } catch (ntErr) {
       console.warn('Failed to auto-resolve nurse tasks or billing queries:', ntErr?.message);
     }
@@ -592,20 +596,25 @@ export class EmrService {
       Consultation.find({ hospitalId: currentTenantHospitalId, patientId: { $in: patientIds } })
         .populate('doctorId', 'name specialization cabinNo')
         .populate('hospitalId', 'name domain code')
-        .sort({ createdAt: -1 }),
+        .sort({ createdAt: -1 })
+        .lean({ getters: true }),
       Prescription.find({ hospitalId: currentTenantHospitalId, patientId: { $in: patientIds } })
         .populate('doctorId', 'name specialization')
         .populate('hospitalId', 'name domain code')
-        .sort({ createdAt: -1 }),
+        .sort({ createdAt: -1 })
+        .lean({ getters: true }),
       DiagnosticOrder.find({ hospitalId: currentTenantHospitalId, patientId: { $in: patientIds } })
         .populate('hospitalId', 'name domain code')
-        .sort({ createdAt: -1 }),
+        .sort({ createdAt: -1 })
+        .lean({ getters: true }),
       NurseTask.find({ hospitalId: currentTenantHospitalId, patientId: { $in: patientIds } })
         .populate('assignedNurseId', 'name')
-        .sort({ createdAt: -1 }),
+        .sort({ createdAt: -1 })
+        .lean({ getters: true }),
       Invoice.find({ hospitalId: currentTenantHospitalId, patientId: { $in: patientIds }, isDeleted: { $ne: true } })
         .populate('hospitalId', 'name domain code')
-        .sort({ createdAt: -1 }),
+        .sort({ createdAt: -1 })
+        .lean({ getters: true }),
     ]);
 
     const currentHospitalId = user?.hospitalId?._id
@@ -713,32 +722,57 @@ export class EmrService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const enriched = await Promise.all(
-      consultations.map(async (c) => {
-        if (!c.patientId) return null;
-        const fDate = new Date(c.followUpDate);
-        fDate.setHours(0, 0, 0, 0);
-
-        // Check if patient returned and completed an appointment on or after followUpDate
-        const attendedVisit = await Appointment.findOne({
-          patientId: c.patientId._id,
-          createdAt: { $gte: fDate },
-          status: { $in: ['COMPLETED', 'ENGAGED', 'IN_CONSULTATION'] },
-        }).lean();
-
-        const isOverdue = fDate < today && !attendedVisit;
-        const isToday = fDate.getTime() === today.getTime() && !attendedVisit;
-        const isUpcoming = fDate > today && !attendedVisit;
-        const followUpStatus = attendedVisit ? 'VISITED' : isOverdue ? 'MISSED_OVERDUE' : isToday ? 'TODAY' : 'UPCOMING';
-
-        return {
-          ...c,
-          followUpStatus,
-          isMissed: isOverdue,
-          attendedVisitId: attendedVisit?._id || null,
-        };
-      })
+    const patientIds = Array.from(
+      new Set(
+        consultations
+          .map((c) => (c.patientId?._id ? String(c.patientId._id) : (c.patientId ? String(c.patientId) : null)))
+          .filter(Boolean)
+      )
     );
+
+    // Batch query attended appointments for all patients to eliminate N+1 waterfall
+    const attendedAppointments = patientIds.length > 0
+      ? await Appointment.find({
+          patientId: { $in: patientIds },
+          status: { $in: ['COMPLETED', 'ENGAGED', 'IN_CONSULTATION'] },
+        })
+          .select('_id patientId createdAt status')
+          .sort({ createdAt: 1 })
+          .lean()
+      : [];
+
+    const apptsByPatientId = new Map();
+    for (const appt of attendedAppointments) {
+      const pid = String(appt.patientId);
+      let list = apptsByPatientId.get(pid);
+      if (!list) {
+        list = [];
+        apptsByPatientId.set(pid, list);
+      }
+      list.push(appt);
+    }
+
+    const enriched = consultations.map((c) => {
+      if (!c.patientId) return null;
+      const fDate = new Date(c.followUpDate);
+      fDate.setHours(0, 0, 0, 0);
+
+      const pid = c.patientId._id ? String(c.patientId._id) : String(c.patientId);
+      const patientAppts = apptsByPatientId.get(pid) || [];
+      const attendedVisit = patientAppts.find((a) => new Date(a.createdAt) >= fDate) || null;
+
+      const isOverdue = fDate < today && !attendedVisit;
+      const isToday = fDate.getTime() === today.getTime() && !attendedVisit;
+      const isUpcoming = fDate > today && !attendedVisit;
+      const followUpStatus = attendedVisit ? 'VISITED' : isOverdue ? 'MISSED_OVERDUE' : isToday ? 'TODAY' : 'UPCOMING';
+
+      return {
+        ...c,
+        followUpStatus,
+        isMissed: isOverdue,
+        attendedVisitId: attendedVisit?._id || null,
+      };
+    });
 
     return enriched.filter(Boolean);
   }

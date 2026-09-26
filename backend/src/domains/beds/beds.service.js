@@ -125,7 +125,8 @@ export class BedsService {
       .populate('floorId', 'name floorNumber')
       .populate('wardId', 'name code wardType genderRestriction defaultDailyCharge')
       .populate('roomId', 'roomNumber roomName roomType maxBedCapacity dailyRoomCharge')
-      .sort({ bedNumber: 1 });
+      .sort({ bedNumber: 1 })
+      .lean({ getters: true });
 
     // Auto-seed default bed matrix ONLY if hospital has never been initialized and is completely empty
     if (beds.length === 0 && Object.keys(query).length === 0) {
@@ -149,7 +150,8 @@ export class BedsService {
             .populate('floorId', 'name floorNumber')
             .populate('wardId', 'name code wardType genderRestriction defaultDailyCharge')
             .populate('roomId', 'roomNumber roomName roomType maxBedCapacity dailyRoomCharge')
-            .sort({ bedNumber: 1 });
+            .sort({ bedNumber: 1 })
+            .lean({ getters: true });
         } else {
           await Hospital.findByIdAndUpdate(hospitalId, { bedStructureInitialized: true });
         }

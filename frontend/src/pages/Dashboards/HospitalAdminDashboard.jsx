@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { StatCard } from '../../components/ui/StatCard';
 import { Card } from '../../components/ui/Card';
@@ -264,17 +264,23 @@ const HospitalAdminDashboardInner = () => {
     fetchHospitalInfo();
   }, []);
 
+  const refreshTimerRef = useRef(null);
+
   useEffect(() => {
     if (!socket) return;
     const handleRefresh = () => {
-      fetchStaff();
-      fetchHospitalInfo();
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => {
+        fetchStaff();
+        fetchHospitalInfo();
+      }, 250);
     };
     socket.on('staff:updated', handleRefresh);
     socket.on('staff:created', handleRefresh);
     socket.on('workflow:notification', handleRefresh);
     socket.on('workflow:pending_changed', handleRefresh);
     return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
       socket.off('staff:updated', handleRefresh);
       socket.off('staff:created', handleRefresh);
       socket.off('workflow:notification', handleRefresh);
@@ -284,9 +290,12 @@ const HospitalAdminDashboardInner = () => {
 
   const fetchHospitalInfo = async () => {
     try {
-      const meRes = await axiosClient.get('/auth/me');
-      if (meRes.data?.data?.hospitalId) {
-        const hId = meRes.data.data.hospitalId._id || meRes.data.data.hospitalId;
+      let hId = user?.hospitalId?._id || user?.hospitalId;
+      if (!hId) {
+        const meRes = await axiosClient.get('/auth/me');
+        hId = meRes.data?.data?.hospitalId?._id || meRes.data?.data?.hospitalId;
+      }
+      if (hId) {
         const hospRes = await axiosClient.get(`/saas/hospitals/${hId}/detail`).catch(() => null);
         if (hospRes?.data?.hospital) {
           setHospitalData(hospRes.data.hospital);
@@ -558,10 +567,33 @@ const HospitalAdminDashboardInner = () => {
     }
   };
 
-  const doctorsCount = staffList.filter((s) => s.role === 'DOCTOR' || (s.additionalRoles && s.additionalRoles.includes('DOCTOR'))).length;
-  const nursingCount = staffList.filter((s) => s.role === 'NURSE' || s.role === 'NURSE_INCHARGE' || (s.additionalRoles && (s.additionalRoles.includes('NURSE') || s.additionalRoles.includes('NURSE_INCHARGE')))).length;
-  const cashiersCount = staffList.filter((s) => ['CASHIER', 'BILLING_STAFF', 'RECEPTIONIST'].includes(s.role) || (s.additionalRoles && s.additionalRoles.some((r) => ['CASHIER', 'BILLING_STAFF', 'RECEPTIONIST'].includes(r)))).length;
-  const techsCount = staffList.filter((s) => ['LAB_TECH', 'LABORATORY_STAFF', 'RADIOLOGIST', 'RADIOLOGY_STAFF'].includes(s.role) || (s.additionalRoles && s.additionalRoles.some((r) => ['LAB_TECH', 'LABORATORY_STAFF', 'RADIOLOGIST', 'RADIOLOGY_STAFF'].includes(r)))).length;
+  const { doctorsCount, nursingCount, cashiersCount, techsCount } = useMemo(() => {
+    let doc = 0;
+    let nurse = 0;
+    let cashier = 0;
+    let tech = 0;
+
+    for (let i = 0; i < staffList.length; i++) {
+      const s = staffList[i];
+      const role = s.role;
+      const addRoles = s.additionalRoles || [];
+
+      if (role === 'DOCTOR' || addRoles.includes('DOCTOR')) {
+        doc++;
+      }
+      if (role === 'NURSE' || role === 'NURSE_INCHARGE' || addRoles.includes('NURSE') || addRoles.includes('NURSE_INCHARGE')) {
+        nurse++;
+      }
+      if (role === 'CASHIER' || role === 'BILLING_STAFF' || role === 'RECEPTIONIST' || addRoles.some((r) => r === 'CASHIER' || r === 'BILLING_STAFF' || r === 'RECEPTIONIST')) {
+        cashier++;
+      }
+      if (role === 'LAB_TECH' || role === 'LABORATORY_STAFF' || role === 'RADIOLOGIST' || role === 'RADIOLOGY_STAFF' || addRoles.some((r) => r === 'LAB_TECH' || r === 'LABORATORY_STAFF' || r === 'RADIOLOGIST' || r === 'RADIOLOGY_STAFF')) {
+        tech++;
+      }
+    }
+
+    return { doctorsCount: doc, nursingCount: nurse, cashiersCount: cashier, techsCount: tech };
+  }, [staffList]);
 
   return (
     <div className="space-y-6 animate-fade-in">

@@ -12,6 +12,18 @@ export const formatDate = (dateString) => {
   });
 };
 
+/**
+ * Same as formatDate but uses DD-Mon-YYYY (en-GB) style used in patient-facing views.
+ * Consolidated from local declarations in PatientDashboard & PatientDetailsModal.
+ */
+export const formatDateGB = (dateVal) => {
+  if (!dateVal) return '—';
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+
 export const formatDateTime = (dateString) => {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleString('en-US', {

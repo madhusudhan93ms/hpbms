@@ -62,4 +62,9 @@ consultationSchema.plugin(encryptedFieldsPlugin, {
   ],
 });
 
+// High-speed compound indexes for clinical histories and doctor consultation rosters
+consultationSchema.index({ hospitalId: 1, doctorId: 1, createdAt: -1 });
+consultationSchema.index({ hospitalId: 1, patientId: 1, createdAt: -1 });
+consultationSchema.index({ hospitalId: 1, createdAt: -1 });
+
 export const Consultation = tenantAwareModel(mongoose.model('Consultation', consultationSchema));

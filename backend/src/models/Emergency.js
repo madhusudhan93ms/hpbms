@@ -50,4 +50,8 @@ const emergencySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// High-speed compound indexes for emergency triage queries
+emergencySchema.index({ hospitalId: 1, status: 1, createdAt: -1 });
+emergencySchema.index({ hospitalId: 1, createdAt: -1 });
+
 export const Emergency = tenantAwareModel(mongoose.model('Emergency', emergencySchema));

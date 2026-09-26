@@ -95,6 +95,10 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// High-speed compound indexes for tenant-scoped staff, admin, and role resolution
+userSchema.index({ hospitalId: 1, role: 1, isActive: 1 });
+userSchema.index({ hospitalId: 1, createdAt: -1 });
+
 userSchema.pre('save', async function (next) {
   if (!this.isModified('passwordHash')) return next();
   // Prevent double hashing if passwordHash is already a valid bcrypt hash

@@ -30,13 +30,14 @@ const recipientQuery = async (context = {}) => {
   const branchId = context?.branchId;
 
   let user = null;
-  if (userId) {
+  const cachedAdditionalRoles = context?.additionalRoles ?? context?.user?.additionalRoles;
+  if (userId && cachedAdditionalRoles === undefined) {
     user = await User.findById(userId).select('hospitalId branchId role additionalRoles').lean().catch(() => null);
   }
   const activeRole = role || user?.role;
   const userRoles = Array.from(new Set([
     activeRole,
-    ...(Array.isArray(user?.additionalRoles) ? user.additionalRoles : []),
+    ...(Array.isArray(cachedAdditionalRoles) ? cachedAdditionalRoles : (Array.isArray(user?.additionalRoles) ? user.additionalRoles : [])),
     ...(user?.role ? [user.role] : []),
   ].filter(Boolean)));
   const tenantId = hospitalId || user?.hospitalId;

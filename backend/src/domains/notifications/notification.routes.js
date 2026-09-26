@@ -8,13 +8,14 @@ router.use(verifyJwt);
 // Get notifications & unread badge count (supports view=active|history|all, page, limit)
 router.get('/', async (req, res, next) => {
   try {
-    const { id: userId, role, hospitalId, branchId } = req.user;
+    const { id: userId, role, hospitalId, branchId, additionalRoles } = req.user;
     const { view = 'active', page = 1, limit = 30 } = req.query;
     const result = await NotificationService.getNotifications({
       userId,
       role,
       hospitalId,
       branchId,
+      additionalRoles,
       view: String(view).toLowerCase(),
       page: Math.max(1, parseInt(page, 10) || 1),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 30)),
@@ -28,8 +29,8 @@ router.get('/', async (req, res, next) => {
 // Get unread badge count only
 router.get('/unread-count', async (req, res, next) => {
   try {
-    const { id: userId, role, hospitalId, branchId } = req.user;
-    const count = await NotificationService.getUnreadCount({ userId, role, hospitalId, branchId });
+    const { id: userId, role, hospitalId, branchId, additionalRoles } = req.user;
+    const count = await NotificationService.getUnreadCount({ userId, role, hospitalId, branchId, additionalRoles });
     res.json({ unreadCount: count });
   } catch (err) {
     next(err);
@@ -86,8 +87,8 @@ router.post('/read-route', async (req, res, next) => {
 // Mark all as read
 router.post('/read-all', async (req, res, next) => {
   try {
-    const { id: userId, role, hospitalId } = req.user;
-    const result = await NotificationService.markAllAsRead({ userId, role, hospitalId });
+    const { id: userId, role, hospitalId, branchId, additionalRoles } = req.user;
+    const result = await NotificationService.markAllAsRead({ userId, role, hospitalId, branchId, additionalRoles });
     res.json(result);
   } catch (err) {
     next(err);

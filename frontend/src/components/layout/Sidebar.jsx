@@ -8,6 +8,7 @@ import { useEmergencyStore } from '../../store/emergencyStore';
 import { getDefaultWorkRoute, useWorkspaceModeStore } from '../../store/workspaceModeStore';
 import { axiosClient } from '../../api/axiosClient';
 import { ROLE_NAVIGATION, ROLE_NAMES } from '../../utils/constants';
+import { getEffectiveUserRoles } from '../auth/TenantRouteGuard';
 import * as Icons from 'lucide-react';
 
 let savedSidebarScrollTop = 0;
@@ -22,7 +23,6 @@ export const WORK_MODE_NAVIGATION = [
   // Front Desk & Billing
   { title: 'Reception Desk', path: '/reception/registered-patients', icon: 'LayoutDashboard', module: 'appointments', category: 'Front Desk & Billing', requiredRoles: ['RECEPTIONIST', 'OPD_STAFF'] },
   { title: 'Follow-Up Visits', path: '/reception/registered-patients?tab=FOLLOW_UPS', icon: 'Calendar', module: 'appointments', category: 'Front Desk & Billing', requiredRoles: ['RECEPTIONIST', 'OPD_STAFF'] },
-  { title: 'Registered Patients', path: '/reception/registered-patients?tab=ALL', icon: 'Users', module: 'patients', category: 'Front Desk & Billing', requiredRoles: ['RECEPTIONIST', 'OPD_STAFF', 'DOCTOR'] },
   { title: 'Central Billing Desk', path: '/billing/dashboard', icon: 'CreditCard', module: 'billing', category: 'Front Desk & Billing', requiredRoles: ['CASHIER', 'BILLING_STAFF'] },
   { title: 'Receipts & Payments', path: '/billing/dashboard?tab=RECEIPTS', icon: 'Receipt', module: 'billing', category: 'Front Desk & Billing', requiredRoles: ['CASHIER', 'BILLING_STAFF'] },
 
@@ -58,7 +58,6 @@ export const WORKFLOW_PATHS = {
 
 const ALL_MODULE_NAVIGATION = [
   { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker' },
-  { title: 'Registered Patients', path: '/reception/registered-patients?tab=ALL', icon: 'Users', module: 'patients' },
   { title: 'Reception Desk', path: '/reception/dashboard', icon: 'LayoutDashboard', module: 'appointments' },
   { title: 'Clinical EMR Desk', path: '/doctor/dashboard', icon: 'Stethoscope', module: 'doctorConsultation' },
   { title: 'IPD Requisitions', path: '/nurse-incharge/dashboard?tab=REQUISITIONS', icon: 'BedDouble', module: 'nursing' },
@@ -189,9 +188,13 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
     if (!socket) return () => clearInterval(interval);
 
+    let refreshDebounceTimer = null;
     const handleRefresh = () => {
-      fetchPendingWork();
-      useNotificationStore.getState().fetchNotifications();
+      if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
+      refreshDebounceTimer = setTimeout(() => {
+        fetchPendingWork();
+        useNotificationStore.getState().fetchNotifications();
+      }, 250);
     };
 
     socket.on('workflow:notification', handleRefresh);
@@ -220,6 +223,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     socket.on('emergency:alert', handleRefresh);
 
     return () => {
+      if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
       clearInterval(interval);
       socket.off('workflow:notification', handleRefresh);
       socket.off('workflow:pending_changed', handleRefresh);
@@ -369,10 +373,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     if (onClose) onClose();
   };
 
-  const userRoles = [
-    user?.role,
-    ...(Array.isArray(user?.additionalRoles) ? user.additionalRoles : []),
-  ].filter(Boolean);
+  const userRoles = getEffectiveUserRoles(user);
 
   const isGuardianView = location.pathname.includes('/guardian') || user?.role === 'GUARDIAN';
   const isDual = isDualModeEligible(user);
@@ -415,7 +416,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
     // Only fallback to ALL_MODULE_NAVIGATION for custom roles or when no role navigation is defined
     if (rawItems.length === 0 && !['PATIENT', 'GUARDIAN'].includes(user?.role)) {
       ALL_MODULE_NAVIGATION.forEach((navItem) => {
-        if (userRoles.includes('RECEPTIONIST') && navItem.path === '/reception/register-patient') return;
         if (checkItemPermission(user, navItem)) {
           rawItems.push(navItem);
         }
@@ -469,6 +469,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
     'Clinical & Patient Care': 'Stethoscope',
     'Clinical Consultations': 'Stethoscope',
     'Clinical Workstation': 'Stethoscope',
+    'Clinic Workflow': 'LayoutDashboard',
     'Front Desk & Billing': 'Receipt',
     'Front Desk Operations': 'LayoutDashboard',
     'Inpatient & Ward': 'BedDouble',
@@ -533,6 +534,19 @@ export const Sidebar = ({ isOpen, onClose }) => {
     });
   };
 
+  // Memoized unread counts map for all navigation items to avoid re-evaluating getUnreadCountForNav 3x per item
+  const navUnreadCounts = React.useMemo(() => {
+    const counts = new Map();
+    groupedCategories.forEach((grp) => {
+      grp.items.forEach((item) => {
+        if (item.path !== '/emergency') {
+          counts.set(item.path, getUnreadCountForNav(item.path) || 0);
+        }
+      });
+    });
+    return counts;
+  }, [groupedCategories, getUnreadCountForNav, deptUnreadCount, deptNotifs, deptByPath, bellUnreadCount, bellNotifs]);
+
   // Memoized active departments alert list for incoming department work
   const activeDepts = React.useMemo(() => {
     if (isDual && currentMode === 'ADMIN') return [];
@@ -555,7 +569,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           return;
         }
 
-        const count = getUnreadCountForNav(item.path);
+        const count = navUnreadCounts.get(item.path) || 0;
         const fullKey = item.path;
         if (count > 0 && !seenKeys.has(fullKey)) {
           seenKeys.add(fullKey);
@@ -570,7 +584,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
       });
     });
     return depts;
-  }, [isDual, currentMode, groupedCategories, activeCount, deptUnreadCount, deptNotifs, deptByPath]);
+  }, [isDual, currentMode, groupedCategories, activeCount, navUnreadCounts]);
 
   return (
     <>
@@ -670,7 +684,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
             const catEmergencyCount = group.items.reduce((acc, it) => acc + (it.path === '/emergency' ? activeCount : 0), 0);
             const catUnreadCount = group.items.reduce((acc, it) => {
               if (it.path === '/emergency') return acc;
-              return acc + (getUnreadCountForNav(it.path) || 0);
+              return acc + (navUnreadCounts.get(it.path) || 0);
             }, 0);
             const hasCategoryAlerts = catEmergencyCount > 0 || catUnreadCount > 0;
 
@@ -736,8 +750,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
                       const IconComponent = Icons[item.icon] || Icons.Circle;
                       const label = item.title || item.name || 'Navigation Item';
                       const active = isItemActive(item.path);
-                      const navUnreadCount = getUnreadCountForNav(item.path);
                       const isEmergencyItem = item.path === '/emergency';
+                      const navUnreadCount = isEmergencyItem ? 0 : (navUnreadCounts.get(item.path) || 0);
                       const isReceiptsHistory = item.path.includes('tab=RECEIPTS') || item.path.includes('/billing/receipts');
 
                       const handleNavClick = (e) => {

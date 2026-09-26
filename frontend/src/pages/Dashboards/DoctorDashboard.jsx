@@ -20,6 +20,7 @@ import { useNotificationStore } from '../../store/notificationStore';
 import { ROLE_NAMES } from '../../utils/constants';
 import { axiosClient } from '../../api/axiosClient';
 import { FollowUpVisitsSection } from '../../components/common/FollowUpVisitsSection';
+import { useDebounce } from '../../hooks/useDebounce';
 import {
   Stethoscope,
   Syringe,
@@ -77,6 +78,8 @@ export const DoctorDashboard = () => {
   const requestedInvoiceId = location.state?.invoiceId || new URLSearchParams(location.search).get('invoiceId');
   const [doctorRequests, setDoctorRequests] = useState([]);
   const [queueSearchTerm, setQueueSearchTerm] = useState('');
+  // Debounce search term — 8 filter loops only re-run 200ms after typing stops (not on every keystroke)
+  const debouncedSearchTerm = useDebounce(queueSearchTerm, 200);
 
   const [patientInvestigations, setPatientInvestigations] = useState([]);
   const [nurseTasks, setNurseTasks] = useState([]);
@@ -157,13 +160,24 @@ export const DoctorDashboard = () => {
     }, { replace: true });
   };
 
+  // AbortController ref — used to cancel in-flight requests on unmount or fast navigation
+  const mountAbortRef = React.useRef(null);
+
   useEffect(() => {
+    const controller = new AbortController();
+    mountAbortRef.current = controller;
+
     fetchOpdQueue();
     fetchDepartmentOrders();
     fetchSubstitutionRequests();
     fetchNurseTasks();
     fetchReturnedBillingPrescriptions();
     fetchDoctorRequests();
+
+    return () => {
+      controller.abort();
+      mountAbortRef.current = null;
+    };
   }, []);
 
   const handleQueueUpdate = () => {
@@ -175,15 +189,31 @@ export const DoctorDashboard = () => {
   useEffect(() => {
     if (!socket) return;
 
-    const handleInvestigationUpdate = (data) => {
-      fetchDepartmentOrders();
-      fetchNurseTasks();
-      fetchReturnedBillingPrescriptions();
-      const activePatientId = selectedToken?.patientId?._id || selectedToken?.patientId || currentPatient?._id || currentPatient?.id;
-      if (activePatientId) {
-        fetchPatientInvestigations(activePatientId);
-        fetchPatientNurseTasks(activePatientId);
-      }
+    let queueTimer = null;
+    let deptTimer = null;
+    let fullSyncTimer = null;
+
+    const debouncedQueueUpdate = () => {
+      if (queueTimer) clearTimeout(queueTimer);
+      queueTimer = setTimeout(() => {
+        fetchOpdQueue();
+        fetchReturnedBillingPrescriptions();
+      }, 250);
+    };
+
+    const debouncedInvestigationUpdate = (data) => {
+      if (deptTimer) clearTimeout(deptTimer);
+      deptTimer = setTimeout(() => {
+        fetchDepartmentOrders();
+        fetchNurseTasks();
+        fetchReturnedBillingPrescriptions();
+        const activePatientId = selectedToken?.patientId?._id || selectedToken?.patientId || currentPatient?._id || currentPatient?.id;
+        if (activePatientId) {
+          fetchPatientInvestigations(activePatientId);
+          fetchPatientNurseTasks(activePatientId);
+        }
+      }, 250);
+
       if (data && data.orderId) {
         addNotification({
           orderId: data.orderId,
@@ -198,6 +228,18 @@ export const DoctorDashboard = () => {
       }
     };
 
+    const debouncedFullSync = () => {
+      if (fullSyncTimer) clearTimeout(fullSyncTimer);
+      fullSyncTimer = setTimeout(() => {
+        fetchOpdQueue();
+        fetchDepartmentOrders();
+        fetchSubstitutionRequests();
+        fetchNurseTasks();
+        fetchReturnedBillingPrescriptions();
+        fetchDoctorRequests();
+      }, 250);
+    };
+
     const handleDoctorAvailability = (data) => {
       const myId = user?.id || user?._id;
       if (String(data.id || data._id) === String(myId)) {
@@ -210,43 +252,48 @@ export const DoctorDashboard = () => {
       }
     };
 
-    const handleBillingQuery = () => {
-      fetchOpdQueue();
-      fetchReturnedBillingPrescriptions();
-    };
+    socket.on('opd_queue:updated', debouncedQueueUpdate);
+    socket.on('opd_queue:status_changed', debouncedQueueUpdate);
+    socket.on('queue:patient_added', debouncedQueueUpdate);
+    socket.on('token:generated', debouncedQueueUpdate);
+    socket.on('patient:registered', debouncedQueueUpdate);
+    socket.on('queue:update', debouncedQueueUpdate);
+    socket.on('doctor:billing_query', debouncedQueueUpdate);
+    socket.on('pharmacy:prescription_returned', debouncedQueueUpdate);
 
-    socket.on('opd_queue:updated', handleQueueUpdate);
-    socket.on('opd_queue:status_changed', handleQueueUpdate);
-    socket.on('queue:patient_added', handleQueueUpdate);
-    socket.on('token:generated', handleQueueUpdate);
-    socket.on('patient:registered', () => { fetchOpdQueue(); });
-    socket.on('investigation:new_request', handleInvestigationUpdate);
-    socket.on('investigation:status_updated', handleInvestigationUpdate);
-    socket.on('diagnostics:report_ready', handleInvestigationUpdate);
+    socket.on('investigation:new_request', debouncedInvestigationUpdate);
+    socket.on('investigation:status_updated', debouncedInvestigationUpdate);
+    socket.on('diagnostics:report_ready', debouncedInvestigationUpdate);
+
     socket.on('doctor:availability_changed', handleDoctorAvailability);
-    socket.on('doctor:billing_query', handleBillingQuery);
-    socket.on('pharmacy:prescription_returned', handleBillingQuery);
-    socket.on('workflow:notification', () => { fetchOpdQueue(); fetchDepartmentOrders(); fetchSubstitutionRequests(); fetchNurseTasks(); fetchReturnedBillingPrescriptions(); fetchDoctorRequests(); });
-    socket.on('queue:update', fetchOpdQueue);
-    socket.on('department:order_update', () => { fetchDepartmentOrders(); fetchSubstitutionRequests(); fetchNurseTasks(); fetchReturnedBillingPrescriptions(); });
-    socket.on('workflow:pending_changed', () => { fetchOpdQueue(); fetchDepartmentOrders(); fetchNurseTasks(); fetchReturnedBillingPrescriptions(); });
+
+    socket.on('workflow:notification', debouncedFullSync);
+    socket.on('department:order_update', debouncedFullSync);
+    socket.on('workflow:pending_changed', debouncedFullSync);
 
     return () => {
-      socket.off('workflow:notification');
-      socket.off('queue:update', fetchOpdQueue);
-      socket.off('department:order_update');
-      socket.off('workflow:pending_changed');
-      socket.off('opd_queue:updated', handleQueueUpdate);
-      socket.off('opd_queue:status_changed', handleQueueUpdate);
-      socket.off('queue:patient_added', handleQueueUpdate);
-      socket.off('token:generated', handleQueueUpdate);
-      socket.off('patient:registered');
-      socket.off('investigation:new_request', handleInvestigationUpdate);
-      socket.off('investigation:status_updated', handleInvestigationUpdate);
-      socket.off('diagnostics:report_ready', handleInvestigationUpdate);
+      if (queueTimer) clearTimeout(queueTimer);
+      if (deptTimer) clearTimeout(deptTimer);
+      if (fullSyncTimer) clearTimeout(fullSyncTimer);
+
+      socket.off('opd_queue:updated', debouncedQueueUpdate);
+      socket.off('opd_queue:status_changed', debouncedQueueUpdate);
+      socket.off('queue:patient_added', debouncedQueueUpdate);
+      socket.off('token:generated', debouncedQueueUpdate);
+      socket.off('patient:registered', debouncedQueueUpdate);
+      socket.off('queue:update', debouncedQueueUpdate);
+      socket.off('doctor:billing_query', debouncedQueueUpdate);
+      socket.off('pharmacy:prescription_returned', debouncedQueueUpdate);
+
+      socket.off('investigation:new_request', debouncedInvestigationUpdate);
+      socket.off('investigation:status_updated', debouncedInvestigationUpdate);
+      socket.off('diagnostics:report_ready', debouncedInvestigationUpdate);
+
       socket.off('doctor:availability_changed', handleDoctorAvailability);
-      socket.off('doctor:billing_query', handleBillingQuery);
-      socket.off('pharmacy:prescription_returned', handleBillingQuery);
+
+      socket.off('workflow:notification', debouncedFullSync);
+      socket.off('department:order_update', debouncedFullSync);
+      socket.off('workflow:pending_changed', debouncedFullSync);
     };
   }, [socket, selectedToken, user?.id, user?._id]);
 
@@ -734,163 +781,234 @@ export const DoctorDashboard = () => {
   const currentPatient = selectedToken?.patientId;
 
   // Filtered lists for Side Navbar Queue Search
-  const filteredLiveQueue = liveQueue.filter((tok) => {
-    const pat = tok.patientId || {};
-    const name = `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase();
-    const uhid = (pat.uhid || '').toLowerCase();
-    const tokenNo = String(tok.tokenNumber || '');
-    const search = queueSearchTerm.toLowerCase();
-    return name.includes(search) || uhid.includes(search) || tokenNo.includes(search);
-  });
+  const filteredLiveQueue = React.useMemo(() => {
+    const search = debouncedSearchTerm.trim().toLowerCase();
+    if (!search) return liveQueue;
+    return liveQueue.filter((tok) => {
+      const pat = tok.patientId || {};
+      const name = `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase();
+      const uhid = (pat.uhid || '').toLowerCase();
+      const tokenNo = String(tok.tokenNumber || '');
+      return name.includes(search) || uhid.includes(search) || tokenNo.includes(search);
+    });
+  }, [liveQueue, debouncedSearchTerm]);
 
-  const filteredCompletedQueue = completedQueue.filter((tok) => {
-    const pat = tok.patientId || {};
-    const name = `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase();
-    const uhid = (pat.uhid || '').toLowerCase();
-    const tokenNo = String(tok.tokenNumber || '');
-    const search = queueSearchTerm.toLowerCase();
-    return name.includes(search) || uhid.includes(search) || tokenNo.includes(search);
-  });
+  const filteredCompletedQueue = React.useMemo(() => {
+    const search = debouncedSearchTerm.trim().toLowerCase();
+    if (!search) return completedQueue;
+    return completedQueue.filter((tok) => {
+      const pat = tok.patientId || {};
+      const name = `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase();
+      const uhid = (pat.uhid || '').toLowerCase();
+      const tokenNo = String(tok.tokenNumber || '');
+      return name.includes(search) || uhid.includes(search) || tokenNo.includes(search);
+    });
+  }, [completedQueue, debouncedSearchTerm]);
+
+  const completedTokenIdSet = React.useMemo(() => {
+    const set = new Set();
+    completedQueue.forEach((tok) => {
+      if (tok._id) set.add(String(tok._id));
+      if (tok.id) set.add(String(tok.id));
+    });
+    return set;
+  }, [completedQueue]);
 
   const doctorUserId = String(user?.id || user?._id || '');
 
   // Nurse Tasks (Active vs History)
-  const allMyNurseTasks = nurseTasks.filter((t) => {
-    return !doctorUserId || String(t.doctorId?._id || t.doctorId || '') === doctorUserId;
-  });
+  const allMyNurseTasks = React.useMemo(() => {
+    return nurseTasks.filter((t) => {
+      return !doctorUserId || String(t.doctorId?._id || t.doctorId || '') === doctorUserId;
+    });
+  }, [nurseTasks, doctorUserId]);
 
-  const activeNurseTasks = allMyNurseTasks.filter((t) => {
-    const isCompletedConsultation =
-      Boolean(t.doctorReviewedAt) ||
-      Boolean(t.isResolved) ||
-      t.status === 'CANCELLED' ||
-      t.appointmentId?.status === 'COMPLETED' ||
-      completedQueue.some((tok) => String(tok._id || tok.id) === String(t.appointmentId?._id || t.appointmentId));
-    return !isCompletedConsultation;
-  });
+  const { activeNurseTasks, historyNurseTasks } = React.useMemo(() => {
+    const active = [];
+    const history = [];
+    allMyNurseTasks.forEach((t) => {
+      const apptId = t.appointmentId?._id ? String(t.appointmentId._id) : (t.appointmentId ? String(t.appointmentId) : '');
+      const isCompletedConsultation =
+        Boolean(t.doctorReviewedAt) ||
+        Boolean(t.isResolved) ||
+        t.status === 'CANCELLED' ||
+        t.appointmentId?.status === 'COMPLETED' ||
+        (apptId && completedTokenIdSet.has(apptId));
 
-  const historyNurseTasks = allMyNurseTasks.filter((t) => {
-    const isCompletedConsultation =
-      Boolean(t.doctorReviewedAt) ||
-      Boolean(t.isResolved) ||
-      t.status === 'CANCELLED' ||
-      t.appointmentId?.status === 'COMPLETED' ||
-      completedQueue.some((tok) => String(tok._id || tok.id) === String(t.appointmentId?._id || t.appointmentId));
-    return Boolean(isCompletedConsultation);
-  });
+      if (isCompletedConsultation) {
+        history.push(t);
+      } else {
+        active.push(t);
+      }
+    });
+    return { activeNurseTasks: active, historyNurseTasks: history };
+  }, [allMyNurseTasks, completedTokenIdSet]);
 
-  const filteredActiveNurseTasks = activeNurseTasks.filter((t) => {
-    const pName = `${t.patientId?.firstName || ''} ${t.patientId?.lastName || ''}`.toLowerCase();
-    const uhid = (t.patientId?.uhid || '').toLowerCase();
-    const medName = (t.medicineName || '').toLowerCase();
-    const search = queueSearchTerm.toLowerCase();
-    return pName.includes(search) || uhid.includes(search) || medName.includes(search);
-  });
+  const filteredActiveNurseTasks = React.useMemo(() => {
+    const search = debouncedSearchTerm.toLowerCase();
+    if (!search) return activeNurseTasks;
+    return activeNurseTasks.filter((t) => {
+      const pName = `${t.patientId?.firstName || ''} ${t.patientId?.lastName || ''}`.toLowerCase();
+      const uhid = (t.patientId?.uhid || '').toLowerCase();
+      const medName = (t.medicineName || '').toLowerCase();
+      return pName.includes(search) || uhid.includes(search) || medName.includes(search);
+    });
+  }, [activeNurseTasks, debouncedSearchTerm]);
 
-  const filteredHistoryNurseTasks = historyNurseTasks.filter((t) => {
-    const pName = `${t.patientId?.firstName || ''} ${t.patientId?.lastName || ''}`.toLowerCase();
-    const uhid = (t.patientId?.uhid || '').toLowerCase();
-    const medName = (t.medicineName || '').toLowerCase();
-    const search = queueSearchTerm.toLowerCase();
-    return pName.includes(search) || uhid.includes(search) || medName.includes(search);
-  });
+  const filteredHistoryNurseTasks = React.useMemo(() => {
+    const search = debouncedSearchTerm.toLowerCase();
+    if (!search) return historyNurseTasks;
+    return historyNurseTasks.filter((t) => {
+      const pName = `${t.patientId?.firstName || ''} ${t.patientId?.lastName || ''}`.toLowerCase();
+      const uhid = (t.patientId?.uhid || '').toLowerCase();
+      const medName = (t.medicineName || '').toLowerCase();
+      return pName.includes(search) || uhid.includes(search) || medName.includes(search);
+    });
+  }, [historyNurseTasks, debouncedSearchTerm]);
 
   // Diagnostics & Imaging Orders (Active vs History)
-  const allMyDeptOrders = departmentOrders.filter((ord) => {
-    return !doctorUserId || String(ord.doctorId?._id || ord.doctorId || '') === doctorUserId;
-  });
+  const allMyDeptOrders = React.useMemo(() => {
+    return departmentOrders.filter((ord) => {
+      return !doctorUserId || String(ord.doctorId?._id || ord.doctorId || '') === doctorUserId;
+    });
+  }, [departmentOrders, doctorUserId]);
 
-  const activeDeptOrders = allMyDeptOrders.filter((ord) => {
-    const isCompletedConsultation =
-      ord.chargeStatus === 'INCLUDED_IN_FINAL_BILL' ||
-      ord.chargeStatus === 'CANCELLED' ||
-      ord.appointmentId?.status === 'COMPLETED' ||
-      completedQueue.some((tok) => String(tok._id || tok.id) === String(ord.appointmentId?._id || ord.appointmentId));
-    return !isCompletedConsultation;
-  });
+  const { activeDeptOrders, historyDeptOrders, unreviewedDeptResponses } = React.useMemo(() => {
+    const active = [];
+    const history = [];
+    const unreviewed = [];
 
-  const historyDeptOrders = allMyDeptOrders.filter((ord) => {
-    const isCompletedConsultation =
-      ord.chargeStatus === 'INCLUDED_IN_FINAL_BILL' ||
-      ord.chargeStatus === 'CANCELLED' ||
-      ord.appointmentId?.status === 'COMPLETED' ||
-      completedQueue.some((tok) => String(tok._id || tok.id) === String(ord.appointmentId?._id || ord.appointmentId));
-    return Boolean(isCompletedConsultation);
-  });
+    allMyDeptOrders.forEach((ord) => {
+      const apptId = ord.appointmentId?._id ? String(ord.appointmentId._id) : (ord.appointmentId ? String(ord.appointmentId) : '');
+      const isCompletedConsultation =
+        ord.chargeStatus === 'INCLUDED_IN_FINAL_BILL' ||
+        ord.chargeStatus === 'CANCELLED' ||
+        ord.appointmentId?.status === 'COMPLETED' ||
+        (apptId && completedTokenIdSet.has(apptId));
 
-  const filteredActiveDeptOrders = activeDeptOrders.filter((ord) => {
-    const pName = (ord.patientName || '').toLowerCase();
-    const uhid = (ord.uhid || '').toLowerCase();
-    const tName = (ord.testName || '').toLowerCase();
-    const search = queueSearchTerm.toLowerCase();
-    return pName.includes(search) || uhid.includes(search) || tName.includes(search);
-  });
+      if (isCompletedConsultation) {
+        history.push(ord);
+      } else {
+        active.push(ord);
+      }
 
-  const filteredHistoryDeptOrders = historyDeptOrders.filter((ord) => {
-    const pName = (ord.patientName || '').toLowerCase();
-    const uhid = (ord.uhid || '').toLowerCase();
-    const tName = (ord.testName || '').toLowerCase();
-    const search = queueSearchTerm.toLowerCase();
-    return pName.includes(search) || uhid.includes(search) || tName.includes(search);
-  });
+      const hasResponse = ['REPORT_UPLOADED', 'COMPLETED'].includes(ord.status) || Boolean(ord.responseSubmittedAt || ord.completedAt);
+      const isReviewed = Boolean(ord.reviewedAt || ord.status === 'REVIEWED' || ord.chargeStatus === 'APPROVED' || ord.chargeStatus === 'INCLUDED_IN_FINAL_BILL');
+      if (hasResponse && !isReviewed) {
+        unreviewed.push(ord);
+      }
+    });
 
-  const unreviewedDeptResponses = allMyDeptOrders.filter((ord) => {
-    const hasResponse = ['REPORT_UPLOADED', 'COMPLETED'].includes(ord.status) || Boolean(ord.responseSubmittedAt || ord.completedAt);
-    const isReviewed = Boolean(ord.reviewedAt || ord.status === 'REVIEWED' || ord.chargeStatus === 'APPROVED' || ord.chargeStatus === 'INCLUDED_IN_FINAL_BILL');
-    return hasResponse && !isReviewed;
-  });
+    return { activeDeptOrders: active, historyDeptOrders: history, unreviewedDeptResponses: unreviewed };
+  }, [allMyDeptOrders, completedTokenIdSet]);
 
+  const filteredActiveDeptOrders = React.useMemo(() => {
+    const search = debouncedSearchTerm.toLowerCase();
+    if (!search) return activeDeptOrders;
+    return activeDeptOrders.filter((ord) => {
+      const pName = (ord.patientName || '').toLowerCase();
+      const uhid = (ord.uhid || '').toLowerCase();
+      const tName = (ord.testName || '').toLowerCase();
+      return pName.includes(search) || uhid.includes(search) || tName.includes(search);
+    });
+  }, [activeDeptOrders, debouncedSearchTerm]);
 
+  const filteredHistoryDeptOrders = React.useMemo(() => {
+    const search = debouncedSearchTerm.toLowerCase();
+    if (!search) return historyDeptOrders;
+    return historyDeptOrders.filter((ord) => {
+      const pName = (ord.patientName || '').toLowerCase();
+      const uhid = (ord.uhid || '').toLowerCase();
+      const tName = (ord.testName || '').toLowerCase();
+      return pName.includes(search) || uhid.includes(search) || tName.includes(search);
+    });
+  }, [historyDeptOrders, debouncedSearchTerm]);
 
   // Backward compatibility alias
   const filteredDeptOrders = filteredActiveDeptOrders;
   const filteredNurseTasks = filteredActiveNurseTasks;
 
   // Billing Desk Queries (Active vs History)
-  const activeReturnedBilling = returnedBillingPrescriptions.filter((rx) => !rx.billingQuery?.resolved);
-  const historyReturnedBilling = returnedBillingPrescriptions.filter((rx) => rx.billingQuery?.resolved);
+  const { activeReturnedBilling, historyReturnedBilling } = React.useMemo(() => {
+    const active = [];
+    const history = [];
+    returnedBillingPrescriptions.forEach((rx) => {
+      if (rx.billingQuery?.resolved) {
+        history.push(rx);
+      } else {
+        active.push(rx);
+      }
+    });
+    return { activeReturnedBilling: active, historyReturnedBilling: history };
+  }, [returnedBillingPrescriptions]);
 
-  const filteredActiveReturnedBilling = activeReturnedBilling.filter((rx) => {
-    const pName = (rx.patientName || `${rx.patientId?.firstName || ''} ${rx.patientId?.lastName || ''}`).toLowerCase();
-    const uhid = (rx.uhid || rx.patientId?.uhid || '').toLowerCase();
-    const queryText = (rx.billingQuery?.query || '').toLowerCase();
-    const search = queueSearchTerm.toLowerCase();
-    return pName.includes(search) || uhid.includes(search) || queryText.includes(search);
-  });
+  const filteredActiveReturnedBilling = React.useMemo(() => {
+    const search = debouncedSearchTerm.toLowerCase();
+    if (!search) return activeReturnedBilling;
+    return activeReturnedBilling.filter((rx) => {
+      const pName = (rx.patientName || `${rx.patientId?.firstName || ''} ${rx.patientId?.lastName || ''}`).toLowerCase();
+      const uhid = (rx.uhid || rx.patientId?.uhid || '').toLowerCase();
+      const queryText = (rx.billingQuery?.query || '').toLowerCase();
+      return pName.includes(search) || uhid.includes(search) || queryText.includes(search);
+    });
+  }, [activeReturnedBilling, debouncedSearchTerm]);
 
-  const filteredHistoryReturnedBilling = historyReturnedBilling.filter((rx) => {
-    const pName = (rx.patientName || `${rx.patientId?.firstName || ''} ${rx.patientId?.lastName || ''}`).toLowerCase();
-    const uhid = (rx.uhid || rx.patientId?.uhid || '').toLowerCase();
-    const queryText = (rx.billingQuery?.query || '').toLowerCase();
-    const search = queueSearchTerm.toLowerCase();
-    return pName.includes(search) || uhid.includes(search) || queryText.includes(search);
-  });
+  const filteredHistoryReturnedBilling = React.useMemo(() => {
+    const search = debouncedSearchTerm.toLowerCase();
+    if (!search) return historyReturnedBilling;
+    return historyReturnedBilling.filter((rx) => {
+      const pName = (rx.patientName || `${rx.patientId?.firstName || ''} ${rx.patientId?.lastName || ''}`).toLowerCase();
+      const uhid = (rx.uhid || rx.patientId?.uhid || '').toLowerCase();
+      const queryText = (rx.billingQuery?.query || '').toLowerCase();
+      return pName.includes(search) || uhid.includes(search) || queryText.includes(search);
+    });
+  }, [historyReturnedBilling, debouncedSearchTerm]);
 
   const filteredReturnedBilling = filteredActiveReturnedBilling;
 
   // Pharmacy Substitutions
-  const activeSubstitutions = substitutionRequests.filter((r) => r.status === 'PENDING');
-  const historySubstitutions = substitutionRequests.filter((r) => r.status !== 'PENDING');
+  const { activeSubstitutions, historySubstitutions } = React.useMemo(() => {
+    const active = [];
+    const history = [];
+    substitutionRequests.forEach((r) => {
+      if (r.status === 'PENDING') {
+        active.push(r);
+      } else {
+        history.push(r);
+      }
+    });
+    return { activeSubstitutions: active, historySubstitutions: history };
+  }, [substitutionRequests]);
 
   // Patient / Guardian Messages
-  const activeDoctorRequests = doctorRequests.filter((r) => r.status === 'PENDING');
-  const historyDoctorRequests = doctorRequests.filter((r) => r.status !== 'PENDING');
+  const { activeDoctorRequests, historyDoctorRequests } = React.useMemo(() => {
+    const active = [];
+    const history = [];
+    doctorRequests.forEach((r) => {
+      if (r.status === 'PENDING') {
+        active.push(r);
+      } else {
+        history.push(r);
+      }
+    });
+    return { activeDoctorRequests: active, historyDoctorRequests: history };
+  }, [doctorRequests]);
 
-  const pendingReportsCount = (
+  const pendingReportsCount = React.useMemo(() => (
     activeDeptOrders.filter((ord) => ['REPORT_UPLOADED', 'COMPLETED'].includes(ord.status) && !ord.reviewedAt && ord.chargeStatus !== 'APPROVED').length +
     activeNurseTasks.filter((t) => t.status === 'ADMINISTERED' && !t.doctorReviewedAt).length +
     activeSubstitutions.length +
     activeReturnedBilling.length +
     activeDoctorRequests.length
-  );
+  ), [activeDeptOrders, activeNurseTasks, activeSubstitutions, activeReturnedBilling, activeDoctorRequests]);
 
-  const historyReportsCount = (
+  const historyReportsCount = React.useMemo(() => (
     historyDeptOrders.length +
     historyNurseTasks.length +
     historyReturnedBilling.length +
     historySubstitutions.length +
     historyDoctorRequests.length
-  );
+  ), [historyDeptOrders, historyNurseTasks, historyReturnedBilling, historySubstitutions, historyDoctorRequests]);
 
   // Keep badge counts strictly synced with active items
   useEffect(() => {

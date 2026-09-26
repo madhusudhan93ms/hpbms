@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { StatCard } from '../../components/ui/StatCard';
 import { Card } from '../../components/ui/Card';
@@ -153,35 +153,40 @@ export const CashierDashboard = () => {
 
   useEffect(() => {
     if (!socket) return;
-    const handler = () => {
-      fetchUnpaidInvoices();
-      fetchAllReceipts();
-      fetchDeletedReceipts();
-      useDepartmentNotificationStore.getState().fetchPendingWork?.();
+    let debounceTimer = null;
+    const debouncedHandler = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchUnpaidInvoices();
+        fetchAllReceipts();
+        fetchDeletedReceipts();
+        useDepartmentNotificationStore.getState().fetchPendingWork?.();
+      }, 250);
     };
-    socket.on('billing:invoice_created', handler);
-    socket.on('billing:invoice_updated', handler);
-    socket.on('billing:invoice_deleted', handler);
-    socket.on('billing:payment_collected', handler);
-    socket.on('billing:receipt_deleted', handler);
-    socket.on('workflow:pending_changed', handler);
-    socket.on('workflow:notification', handler);
-    socket.on('workflow:notification_cleared', handler);
-    socket.on('consultation:completed', handler);
-    socket.on('doctor:billing_query_response', handler);
-    socket.on('notification:created', handler);
+    socket.on('billing:invoice_created', debouncedHandler);
+    socket.on('billing:invoice_updated', debouncedHandler);
+    socket.on('billing:invoice_deleted', debouncedHandler);
+    socket.on('billing:payment_collected', debouncedHandler);
+    socket.on('billing:receipt_deleted', debouncedHandler);
+    socket.on('workflow:pending_changed', debouncedHandler);
+    socket.on('workflow:notification', debouncedHandler);
+    socket.on('workflow:notification_cleared', debouncedHandler);
+    socket.on('consultation:completed', debouncedHandler);
+    socket.on('doctor:billing_query_response', debouncedHandler);
+    socket.on('notification:created', debouncedHandler);
     return () => {
-      socket.off('billing:invoice_created', handler);
-      socket.off('billing:invoice_updated', handler);
-      socket.off('billing:invoice_deleted', handler);
-      socket.off('billing:payment_collected', handler);
-      socket.off('billing:receipt_deleted', handler);
-      socket.off('workflow:pending_changed', handler);
-      socket.off('workflow:notification', handler);
-      socket.off('workflow:notification_cleared', handler);
-      socket.off('consultation:completed', handler);
-      socket.off('doctor:billing_query_response', handler);
-      socket.off('notification:created', handler);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      socket.off('billing:invoice_created', debouncedHandler);
+      socket.off('billing:invoice_updated', debouncedHandler);
+      socket.off('billing:invoice_deleted', debouncedHandler);
+      socket.off('billing:payment_collected', debouncedHandler);
+      socket.off('billing:receipt_deleted', debouncedHandler);
+      socket.off('workflow:pending_changed', debouncedHandler);
+      socket.off('workflow:notification', debouncedHandler);
+      socket.off('workflow:notification_cleared', debouncedHandler);
+      socket.off('consultation:completed', debouncedHandler);
+      socket.off('doctor:billing_query_response', debouncedHandler);
+      socket.off('notification:created', debouncedHandler);
     };
   }, [socket, fetchUnpaidInvoices, fetchAllReceipts, fetchDeletedReceipts]);
 
@@ -283,28 +288,34 @@ export const CashierDashboard = () => {
     window.open(`https://wa.me/${cleanPhone.length >= 10 ? cleanPhone : ''}?text=${encoded}`, '_blank');
   };
 
-  const filteredReceipts = allReceipts.filter((rc) => {
-    const pat = rc.patientId || rc.invoiceId?.patientId || {};
-    const name = `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase();
-    const uhid = (pat.uhid || '').toLowerCase();
-    const rcNo = (rc.receiptNo || '').toLowerCase();
-    const invNo = (rc.invoiceId?.invoiceNo || '').toLowerCase();
-    const phone = (pat.phone || '').toLowerCase();
-    const search = receiptSearchTerm.toLowerCase();
-    return name.includes(search) || uhid.includes(search) || rcNo.includes(search) || invNo.includes(search) || phone.includes(search);
-  });
+  const filteredReceipts = useMemo(() => {
+    const search = receiptSearchTerm.trim().toLowerCase();
+    if (!search) return allReceipts;
+    return allReceipts.filter((rc) => {
+      const pat = rc.patientId || rc.invoiceId?.patientId || {};
+      const name = `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase();
+      const uhid = (pat.uhid || '').toLowerCase();
+      const rcNo = (rc.receiptNo || '').toLowerCase();
+      const invNo = (rc.invoiceId?.invoiceNo || '').toLowerCase();
+      const phone = (pat.phone || '').toLowerCase();
+      return name.includes(search) || uhid.includes(search) || rcNo.includes(search) || invNo.includes(search) || phone.includes(search);
+    });
+  }, [allReceipts, receiptSearchTerm]);
 
-  const filteredDeletedReceipts = deletedReceipts.filter((rc) => {
-    const pat = rc.patientId || rc.invoiceId?.patientId || {};
-    const name = `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase();
-    const uhid = (pat.uhid || '').toLowerCase();
-    const rcNo = (rc.receiptNo || '').toLowerCase();
-    const invNo = (rc.invoiceId?.invoiceNo || rc.invoiceNo || '').toLowerCase();
-    const reason = (rc.deletionReason || '').toLowerCase();
-    const deletedBy = (rc.deletedByName || rc.deletedBy?.name || '').toLowerCase();
-    const search = receiptSearchTerm.toLowerCase();
-    return name.includes(search) || uhid.includes(search) || rcNo.includes(search) || invNo.includes(search) || reason.includes(search) || deletedBy.includes(search);
-  });
+  const filteredDeletedReceipts = useMemo(() => {
+    const search = receiptSearchTerm.trim().toLowerCase();
+    if (!search) return deletedReceipts;
+    return deletedReceipts.filter((rc) => {
+      const pat = rc.patientId || rc.invoiceId?.patientId || {};
+      const name = `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase();
+      const uhid = (pat.uhid || '').toLowerCase();
+      const rcNo = (rc.receiptNo || '').toLowerCase();
+      const invNo = (rc.invoiceId?.invoiceNo || rc.invoiceNo || '').toLowerCase();
+      const reason = (rc.deletionReason || '').toLowerCase();
+      const deletedBy = (rc.deletedByName || rc.deletedBy?.name || '').toLowerCase();
+      return name.includes(search) || uhid.includes(search) || rcNo.includes(search) || invNo.includes(search) || reason.includes(search) || deletedBy.includes(search);
+    });
+  }, [deletedReceipts, receiptSearchTerm]);
 
   const patient    = selectedInvoice?.patientId;
   const consult    = selectedInvoice?.consultation;

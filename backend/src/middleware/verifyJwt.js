@@ -79,13 +79,20 @@ const extractId = (val) => {
   return String(val);
 };
 
-export const activateVerifiedTenantConnection = async (user) => {
+export const activateVerifiedTenantConnection = async (user, preloadedHospital = null) => {
   const hospitalId = extractId(user?.hospitalId);
   if (!hospitalId || user?.role === 'SUPER_ADMIN' && !user?._hospitalContextApplied) return null;
 
-  const hospital = await Hospital.findById(hospitalId)
-    .select('_id storageMode databaseKey databaseMigrationStatus databaseProvisionedAt')
-    .lean();
+  const candidate = preloadedHospital || user?._preloadedHospital;
+  let hospital = candidate && String(candidate._id) === String(hospitalId) && candidate.storageMode !== undefined
+    ? candidate
+    : null;
+
+  if (!hospital) {
+    hospital = await Hospital.findById(hospitalId)
+      .select('_id storageMode databaseKey databaseMigrationStatus databaseProvisionedAt')
+      .lean();
+  }
   if (!hospital) {
     throw new Error('Authenticated hospital tenant no longer exists.');
   }
@@ -141,7 +148,7 @@ export const verifyJwt = async (req, res, next) => {
     let currentUser = null;
     if (decoded.id && decoded.role !== 'SUPER_ADMIN') {
       currentUser = await User.findById(decoded.id)
-        .select('hospitalId branchId role additionalRoles isActive status permissions revokedPermissions departmentId additionalDepartments phone uhid patientId email name')
+        .select('hospitalId branchId role additionalRoles isAvailable adminDepartmentAvailability isActive status permissions revokedPermissions departmentId additionalDepartments phone uhid patientId email name')
         .lean();
 
       if (currentUser) {
@@ -149,7 +156,25 @@ export const verifyJwt = async (req, res, next) => {
           return sendError(res, 403, 'Your account is inactive.', null, 'ACCOUNT_INACTIVE');
         }
         req.user.role = currentUser.role || decoded.role;
-        req.user.additionalRoles = currentUser.additionalRoles || [];
+        const activeAdditionalRoles = new Set(currentUser.additionalRoles || []);
+        if (currentUser.role === 'HOSPITAL_ADMIN' && currentUser.isAvailable !== false && currentUser.adminDepartmentAvailability) {
+          const roleMap = {
+            DOCTOR: ['DOCTOR'],
+            RECEPTIONIST: ['RECEPTIONIST', 'OPD_STAFF'],
+            CASHIER: ['CASHIER', 'BILLING_STAFF'],
+            PHARMACIST: ['PHARMACIST', 'PHARMACY_STAFF'],
+            LAB_TECH: ['LAB_TECH', 'LABORATORY_STAFF'],
+            RADIOLOGIST: ['RADIOLOGIST', 'RADIOLOGY_STAFF'],
+            NURSE: ['NURSE', 'NURSE_INCHARGE', 'IPD_STAFF'],
+            EMERGENCY_STAFF: ['EMERGENCY_STAFF'],
+          };
+          for (const [dept, isEnabled] of Object.entries(currentUser.adminDepartmentAvailability)) {
+            if (isEnabled && roleMap[dept]) {
+              roleMap[dept].forEach((r) => activeAdditionalRoles.add(r));
+            }
+          }
+        }
+        req.user.additionalRoles = Array.from(activeAdditionalRoles);
         req.user.additionalDepartments = currentUser.additionalDepartments || [];
         req.user.permissions = currentUser.permissions || {};
         req.user.departmentId = currentUser.departmentId;
@@ -172,11 +197,12 @@ export const verifyJwt = async (req, res, next) => {
     // remain available so the retained account is still usable for review.
     if (req.user.role !== 'SUPER_ADMIN' && req.user.hospitalId) {
       const hospitalAccess = await Hospital.findById(req.user.hospitalId)
-        .select('status trialStatus isTrial trialEndDate subscriptionEndDate')
+        .select('_id storageMode databaseKey databaseMigrationStatus databaseProvisionedAt status trialStatus isTrial trialEndDate subscriptionEndDate')
         .lean();
       if (!hospitalAccess) {
         return sendError(res, 403, 'Your hospital tenant is no longer available.', null, 'HOSPITAL_UNAVAILABLE');
       }
+      req.user._preloadedHospital = hospitalAccess;
       const now = Date.now();
       const isExpired = hospitalAccess.status === 'EXPIRED'
         || hospitalAccess.trialStatus === 'TRIAL_EXPIRED'
@@ -239,6 +265,7 @@ export const verifyJwt = async (req, res, next) => {
     if (!isAuthProfileOrLogout && !isSuperAdminSaas) {
       await activateVerifiedTenantConnection(req.user);
     }
+    delete req.user._preloadedHospital;
     next();
   } catch (error) {
     if (['TENANT_DATABASE_NOT_READY', 'TENANT_RUNTIME_NOT_READY', 'TENANT_WRITE_MAINTENANCE'].includes(error.code)) {

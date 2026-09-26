@@ -48,10 +48,16 @@ export const SocketProvider = ({ children }) => {
     };
   }, [token, isAuthenticated]);
 
-  const dismissCodeBlue = () => setActiveCodeBlue(null);
+  const dismissCodeBlue = React.useCallback(() => setActiveCodeBlue(null), []);
+
+  const contextValue = React.useMemo(() => ({
+    socket,
+    activeCodeBlue,
+    dismissCodeBlue,
+  }), [socket, activeCodeBlue, dismissCodeBlue]);
 
   return (
-    <SocketContext.Provider value={{ socket, activeCodeBlue, dismissCodeBlue }}>
+    <SocketContext.Provider value={contextValue}>
       {children}
     </SocketContext.Provider>
   );

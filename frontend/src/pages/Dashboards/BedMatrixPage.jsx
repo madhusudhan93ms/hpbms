@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -54,12 +54,14 @@ import {
 } from 'lucide-react';
 
 import { useAuthStore } from '../../store/authStore';
+import { getEffectiveUserRoles } from '../../components/auth/TenantRouteGuard';
 
 export const BedMatrixPage = () => {
   const { user } = useAuthStore();
+  const effectiveRoles = getEffectiveUserRoles(user);
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'HOSPITAL_ADMIN';
-  const isNurse = user?.role === 'NURSE' || user?.role === 'NURSE_INCHARGE';
-  const isDoctor = user?.role === 'DOCTOR';
+  const isNurse = user?.role === 'NURSE' || user?.role === 'NURSE_INCHARGE' || effectiveRoles.includes('NURSE') || effectiveRoles.includes('NURSE_INCHARGE') || effectiveRoles.includes('IPD_STAFF');
+  const isDoctor = user?.role === 'DOCTOR' || effectiveRoles.includes('DOCTOR');
   const { socket } = useSocket();
 
   // Active Main Tab
@@ -145,8 +147,12 @@ export const BedMatrixPage = () => {
   // Real-time socket updates
   useEffect(() => {
     if (!socket) return;
+    let debounceTimer = null;
     const handleUpdate = () => {
-      fetchAllData();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchAllData();
+      }, 250);
     };
 
     socket.on('bed:status_changed', handleUpdate);
@@ -155,6 +161,7 @@ export const BedMatrixPage = () => {
     socket.on('workflow:pending_changed', handleUpdate);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       socket.off('bed:status_changed', handleUpdate);
       socket.off('bed:transfer_completed', handleUpdate);
       socket.off('admission:confirmed', handleUpdate);
@@ -232,42 +239,47 @@ export const BedMatrixPage = () => {
   };
 
   // Filtering Logic
-  const filteredBeds = beds.filter((b) => {
-    if (filterBlock !== 'ALL' && String(b.blockId?._id || b.blockId) !== String(filterBlock)) return false;
-    if (filterFloor !== 'ALL' && String(b.floorId?._id || b.floorId) !== String(filterFloor)) return false;
-    if (filterWard !== 'ALL' && String(b.wardId?._id || b.wardId) !== String(filterWard)) return false;
-    if (filterStatus !== 'ALL' && b.status !== filterStatus) return false;
-    if (filterWardType !== 'ALL' && b.wardType !== filterWardType) return false;
-    if (filterBedType !== 'ALL' && b.bedType !== filterBedType) return false;
+  const filteredBeds = useMemo(() => {
+    const s = searchTerm.trim().toLowerCase();
+    return beds.filter((b) => {
+      if (filterBlock !== 'ALL' && String(b.blockId?._id || b.blockId) !== String(filterBlock)) return false;
+      if (filterFloor !== 'ALL' && String(b.floorId?._id || b.floorId) !== String(filterFloor)) return false;
+      if (filterWard !== 'ALL' && String(b.wardId?._id || b.wardId) !== String(filterWard)) return false;
+      if (filterStatus !== 'ALL' && b.status !== filterStatus) return false;
+      if (filterWardType !== 'ALL' && b.wardType !== filterWardType) return false;
+      if (filterBedType !== 'ALL' && b.bedType !== filterBedType) return false;
 
-    if (searchTerm.trim()) {
-      const s = searchTerm.trim().toLowerCase();
-      const bedNo = (b.bedNumber || '').toLowerCase();
-      const roomNo = (b.roomNumber || '').toLowerCase();
-      const wardN = (b.wardName || '').toLowerCase();
-      const pat = b.currentPatientId;
-      const patName = pat ? `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase() : '';
-      const patUhid = pat ? (pat.uhid || '').toLowerCase() : '';
-      return bedNo.includes(s) || roomNo.includes(s) || wardN.includes(s) || patName.includes(s) || patUhid.includes(s);
-    }
-    return true;
-  });
+      if (s) {
+        const bedNo = (b.bedNumber || '').toLowerCase();
+        const roomNo = (b.roomNumber || '').toLowerCase();
+        const wardN = (b.wardName || '').toLowerCase();
+        const pat = b.currentPatientId;
+        const patName = pat ? `${pat.firstName || ''} ${pat.lastName || ''}`.toLowerCase() : '';
+        const patUhid = pat ? (pat.uhid || '').toLowerCase() : '';
+        return bedNo.includes(s) || roomNo.includes(s) || wardN.includes(s) || patName.includes(s) || patUhid.includes(s);
+      }
+      return true;
+    });
+  }, [beds, filterBlock, filterFloor, filterWard, filterStatus, filterWardType, filterBedType, searchTerm]);
 
   // Group filtered beds by Ward / Section for Grid View
-  const groupedWards = {};
-  filteredBeds.forEach((b) => {
-    const wardKey = b.wardName || b.wardId?.name || 'General Ward';
-    if (!groupedWards[wardKey]) {
-      groupedWards[wardKey] = {
-        wardName: wardKey,
-        wardType: b.wardType || 'GENERAL',
-        blockName: b.blockName || b.blockId?.name || '',
-        floorName: b.floorName || b.floorId?.name || '',
-        beds: [],
-      };
-    }
-    groupedWards[wardKey].beds.push(b);
-  });
+  const groupedWards = useMemo(() => {
+    const map = {};
+    filteredBeds.forEach((b) => {
+      const wardKey = b.wardName || b.wardId?.name || 'General Ward';
+      if (!map[wardKey]) {
+        map[wardKey] = {
+          wardName: wardKey,
+          wardType: b.wardType || 'GENERAL',
+          blockName: b.blockName || b.blockId?.name || '',
+          floorName: b.floorName || b.floorId?.name || '',
+          beds: [],
+        };
+      }
+      map[wardKey].beds.push(b);
+    });
+    return map;
+  }, [filteredBeds]);
 
   const getStatusBadge = (status) => {
     switch (status) {

@@ -251,16 +251,21 @@ export const AppRoutes = () => {
         <Route path="/admin/hospital/:hospitalId/settings" element={<SuperAdminLayout><GenericSubView title="Hospital Settings" subtitle="Configuration & Preferences" iconName="Settings" /></SuperAdminLayout>} />
       </Route>
 
-      {/* 2. Hospital Admin Sub-Routes */}
-      <Route element={<ProtectedRoute allowedRoles={[ROLES.HOSPITAL_ADMIN, ROLES.SUPER_ADMIN, ROLES.DEPARTMENT_MANAGER]} />}>
-        <Route path="/admin/dashboard" element={<MainLayout><HospitalAdminDashboard /></MainLayout>} />
+      {/* Ward & Bed Matrix — Accessible to Admin, Doctors, Nurses and Ward Staff */}
+      <Route element={<ProtectedRoute allowedRoles={[ROLES.HOSPITAL_ADMIN, ROLES.SUPER_ADMIN, ROLES.DEPARTMENT_MANAGER, ROLES.DOCTOR, ROLES.NURSE, ROLES.NURSE_INCHARGE, ROLES.IPD_STAFF]} />}>
         <Route path="/admin/bed-matrix" element={<MainLayout><BedMatrixPage /></MainLayout>} />
+        <Route path="/hospital-admin/bed-matrix" element={<MainLayout><BedMatrixPage /></MainLayout>} />
         <Route path="/admin/beds" element={<MainLayout><BedMatrixPage /></MainLayout>} />
         <Route path="/hospital-admin/beds" element={<MainLayout><BedMatrixPage /></MainLayout>} />
         <Route path="/ipd/beds" element={<MainLayout><BedMatrixPage /></MainLayout>} />
         <Route path="/ipd/bed-matrix" element={<MainLayout><BedMatrixPage /></MainLayout>} />
         <Route path="/bed-matrix" element={<MainLayout><BedMatrixPage /></MainLayout>} />
         <Route path="/beds" element={<MainLayout><BedMatrixPage /></MainLayout>} />
+      </Route>
+
+      {/* 2. Hospital Admin Sub-Routes */}
+      <Route element={<ProtectedRoute allowedRoles={[ROLES.HOSPITAL_ADMIN, ROLES.SUPER_ADMIN, ROLES.DEPARTMENT_MANAGER]} />}>
+        <Route path="/admin/dashboard" element={<MainLayout><HospitalAdminDashboard /></MainLayout>} />
         <Route path="/admin/staff" element={<MainLayout><HospitalAdminDashboard /></MainLayout>} />
         <Route path="/admin/departments" element={<MainLayout><GenericSubView title="Departments & Wards Setup" subtitle="Clinical and Diagnostic Departments" iconName="GitFork" /></MainLayout>} />
         <Route path="/admin/tariffs" element={<MainLayout><AdminExtraPage /></MainLayout>} />
@@ -280,7 +285,6 @@ export const AppRoutes = () => {
         <Route path="/admin/emergency-management" element={<MainLayout><HospitalAdminManagementViews viewType="emergency" /></MainLayout>} />
         {/* Legacy /hospital-admin/* aliases */}
         <Route path="/hospital-admin/dashboard" element={<MainLayout><HospitalAdminDashboard /></MainLayout>} />
-        <Route path="/hospital-admin/bed-matrix" element={<MainLayout><BedMatrixPage /></MainLayout>} />
         <Route path="/hospital-admin/staff" element={<MainLayout><HospitalAdminDashboard /></MainLayout>} />
         <Route path="/hospital-admin/departments" element={<MainLayout><GenericSubView title="Departments & Wards Setup" subtitle="Clinical and Diagnostic Departments" iconName="GitFork" /></MainLayout>} />
         <Route path="/hospital-admin/tariffs" element={<MainLayout><AdminExtraPage /></MainLayout>} />
@@ -310,7 +314,7 @@ export const AppRoutes = () => {
       </Route>
 
       {/* 4. Nurse Sub-Routes (Consolidated Nursing Module) */}
-      <Route element={<ProtectedRoute allowedRoles={[ROLES.NURSE, ROLES.NURSE_INCHARGE, ROLES.IPD_STAFF]} />}>
+      <Route element={<ProtectedRoute allowedRoles={[ROLES.NURSE, ROLES.NURSE_INCHARGE, ROLES.IPD_STAFF, ROLES.DOCTOR, ROLES.HOSPITAL_ADMIN]} />}>
         <Route path="/nurse/bed-matrix" element={<MainLayout><BedMatrixPage /></MainLayout>} />
         <Route path="/nursing/dashboard" element={<MainLayout><NurseInchargeDashboard /></MainLayout>} />
         <Route path="/nursing/beds" element={<MainLayout><BedMatrixPage /></MainLayout>} />
@@ -491,7 +495,7 @@ export const AppRoutes = () => {
       </Route>
 
       {/* Nurse & Nurse-Incharge tenant routes */}
-      <Route element={<TenantRouteGuard allowedRoles={[ROLES.NURSE, ROLES.NURSE_INCHARGE, ROLES.IPD_STAFF]} />}>
+      <Route element={<TenantRouteGuard allowedRoles={[ROLES.NURSE, ROLES.NURSE_INCHARGE, ROLES.IPD_STAFF, ROLES.DOCTOR, ROLES.HOSPITAL_ADMIN]} />}>
         <Route path="/:hospitalDomain/nurse/dashboard" element={<MainLayout><NurseInchargeDashboard /></MainLayout>} />
         <Route path="/:hospitalDomain/nurse/bed-matrix" element={<MainLayout><BedMatrixPage /></MainLayout>} />
         <Route path="/:hospitalDomain/nursing/dashboard" element={<MainLayout><NurseInchargeDashboard /></MainLayout>} />

@@ -70,7 +70,12 @@ export class PatientsService {
     const matches = await Patient.find({
       hospitalId,
       $or: orConditions,
-    }).populate('activeAdmissionId', 'status admittedAt wardType bedNumber').sort({ createdAt: -1 }).limit(5);
+    })
+      .select('firstName lastName uhid phone dob admissionStatus activeAdmissionId createdAt')
+      .populate('activeAdmissionId', 'status admittedAt wardType bedNumber')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean({ getters: true });
 
     return matches;
   }
@@ -92,7 +97,8 @@ export class PatientsService {
 
     const globalPatients = await GlobalPatient.find({ $or: orConditions, isActive: true })
       .select('globalPatientId firstName lastName dob gender primaryPhone email bloodGroup hospitalMemberships')
-      .limit(5);
+      .limit(5)
+      .lean();
 
     // Redact internal hospital patient IDs — only return membership count and hospital names
     return globalPatients.map(gp => ({
@@ -164,7 +170,9 @@ export class PatientsService {
           $gte: new Date(new Date(parsedDob).setHours(0, 0, 0, 0)),
           $lte: new Date(new Date(parsedDob).setHours(23, 59, 59, 999)),
         },
-      });
+      })
+        .select('_id uhid firstName lastName phone dob')
+        .lean();
 
       if (exactDuplicate) {
         const err = new ApiError(
@@ -261,17 +269,20 @@ export class PatientsService {
       // --- GLOBAL IDENTITY LINKING ---
       let globalPatient = null;
       try {
-        const hospital = await Hospital.findById(hospitalId).lean();
         const phoneDigits = patientPhone.replace(/\D/g, '').slice(-10);
 
-        // Search for existing GlobalPatient
-        globalPatient = await GlobalPatient.findOne({
-          $or: [
-            { primaryPhone: { $regex: phoneDigits, $options: 'i' } },
-            ...(data.email ? [{ email: data.email.toLowerCase().trim() }] : []),
-            ...(data.nationalId ? [{ nationalId: data.nationalId.trim() }] : []),
-          ]
-        });
+        // Concurrently resolve hospital name and search for existing GlobalPatient
+        const [hospital, foundGlobalPatient] = await Promise.all([
+          Hospital.findById(hospitalId).select('name').lean(),
+          GlobalPatient.findOne({
+            $or: [
+              { primaryPhone: { $regex: phoneDigits, $options: 'i' } },
+              ...(data.email ? [{ email: data.email.toLowerCase().trim() }] : []),
+              ...(data.nationalId ? [{ nationalId: data.nationalId.trim() }] : []),
+            ]
+          }),
+        ]);
+        globalPatient = foundGlobalPatient;
 
         if (!globalPatient) {
           const gpCount = await GlobalPatient.countDocuments({});
@@ -341,16 +352,17 @@ export class PatientsService {
       try {
         const userEmail = `${uhid.toLowerCase()}@hospital.local`;
         const userPassword = patientPhone || uhid;
-        // Cost 10: ~4x faster than 12, still cryptographically strong (>100ms)
-        const passwordHash = await bcrypt.hash(userPassword, 10);
-
-        const existingUser = await User.findOne({
-          $or: [
-            { email: userEmail },
-            ...(patientPhone ? [{ role: 'PATIENT', loginIds: patientPhone }] : []),
-            { uhid },
-          ],
-        });
+        // Concurrently overlap CPU bcrypt hash with MongoDB user lookup
+        const [passwordHash, existingUser] = await Promise.all([
+          bcrypt.hash(userPassword, 10),
+          User.findOne({
+            $or: [
+              { email: userEmail },
+              ...(patientPhone ? [{ role: 'PATIENT', loginIds: patientPhone }] : []),
+              { uhid },
+            ],
+          }),
+        ]);
 
         if (!existingUser) {
           patientUserAccount = await User.create({
@@ -515,7 +527,7 @@ export class PatientsService {
   static async getPatientByUhid(uhid, user) {
     const hospitalId = requireHospitalContext(user);
     const filter = { hospitalId, uhid: uhid.toUpperCase() };
-    const patient = await Patient.findOne(filter);
+    const patient = await Patient.findOne(filter).lean({ getters: true });
     if (!patient) {
       throw new ApiError(404, `Patient with UHID ${uhid} not found`, null, 'NOT_FOUND');
     }

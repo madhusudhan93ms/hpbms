@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Stethoscope, ConciergeBell, Activity, TestTube, Scan, Pill, CreditCard,
@@ -538,49 +538,55 @@ export const SuperAdminHospitalDashboard = () => {
     }
   };
 
-  const filteredStaff = staffList.filter((staff) => {
-    if (roleFilter === 'ALL_ACTIVE' && !staff.isActive && staff.status !== 'ACTIVE') return false;
-    if (roleFilter === 'ALL_INACTIVE' && (staff.isActive || staff.status === 'ACTIVE')) return false;
+  const filteredStaff = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    const targetRole = roleFilter !== 'ALL' && roleFilter !== 'ALL_ACTIVE' && roleFilter !== 'ALL_INACTIVE'
+      ? String(roleFilter).toUpperCase()
+      : null;
 
-    if (roleFilter !== 'ALL' && roleFilter !== 'ALL_ACTIVE' && roleFilter !== 'ALL_INACTIVE') {
-      const sRole = String(staff.role || '').toUpperCase();
-      const targetRole = String(roleFilter).toUpperCase();
-      const addRoles = (staff.additionalRoles || []).map((r) => String(r).toUpperCase());
+    return staffList.filter((staff) => {
+      const isActive = staff.isActive || staff.status === 'ACTIVE';
+      if (roleFilter === 'ALL_ACTIVE' && !isActive) return false;
+      if (roleFilter === 'ALL_INACTIVE' && isActive) return false;
 
-      if (targetRole === 'DOCTOR' && !['DOCTOR', 'PHYSICIAN'].includes(sRole) && !addRoles.includes('DOCTOR')) return false;
-      if (targetRole === 'NURSE' && !['NURSE', 'NURSE_INCHARGE'].includes(sRole) && !addRoles.includes('NURSE') && !addRoles.includes('NURSE_INCHARGE')) return false;
-      if (targetRole === 'RECEPTIONIST' && !['RECEPTIONIST', 'RECEPTION', 'FRONT_DESK'].includes(sRole) && !addRoles.includes('RECEPTIONIST')) return false;
-      if (targetRole === 'LAB_TECH' && !['LAB_TECH', 'LABORATORY_STAFF', 'PATHOLOGIST'].includes(sRole) && !addRoles.includes('LAB_TECH')) return false;
-      if (targetRole === 'RADIOLOGIST' && !['RADIOLOGIST', 'RADIOLOGY_STAFF'].includes(sRole) && !addRoles.includes('RADIOLOGIST')) return false;
-      if (targetRole === 'PHARMACIST' && !['PHARMACIST', 'PHARMACY_STAFF'].includes(sRole) && !addRoles.includes('PHARMACIST')) return false;
-      if (targetRole === 'CASHIER' && !['CASHIER', 'BILLING_STAFF', 'ACCOUNTANT'].includes(sRole) && !addRoles.includes('CASHIER')) return false;
-      if (targetRole === 'HOSPITAL_ADMIN' && !['HOSPITAL_ADMIN', 'ADMIN'].includes(sRole) && !addRoles.includes('HOSPITAL_ADMIN')) return false;
-    }
+      if (targetRole) {
+        const sRole = String(staff.role || '').toUpperCase();
+        const addRoles = (staff.additionalRoles || []).map((r) => String(r).toUpperCase());
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+        if (targetRole === 'DOCTOR' && !['DOCTOR', 'PHYSICIAN'].includes(sRole) && !addRoles.includes('DOCTOR')) return false;
+        if (targetRole === 'NURSE' && !['NURSE', 'NURSE_INCHARGE'].includes(sRole) && !addRoles.includes('NURSE') && !addRoles.includes('NURSE_INCHARGE')) return false;
+        if (targetRole === 'RECEPTIONIST' && !['RECEPTIONIST', 'RECEPTION', 'FRONT_DESK'].includes(sRole) && !addRoles.includes('RECEPTIONIST')) return false;
+        if (targetRole === 'LAB_TECH' && !['LAB_TECH', 'LABORATORY_STAFF', 'PATHOLOGIST'].includes(sRole) && !addRoles.includes('LAB_TECH')) return false;
+        if (targetRole === 'RADIOLOGIST' && !['RADIOLOGIST', 'RADIOLOGY_STAFF'].includes(sRole) && !addRoles.includes('RADIOLOGIST')) return false;
+        if (targetRole === 'PHARMACIST' && !['PHARMACIST', 'PHARMACY_STAFF'].includes(sRole) && !addRoles.includes('PHARMACIST')) return false;
+        if (targetRole === 'CASHIER' && !['CASHIER', 'BILLING_STAFF', 'ACCOUNTANT'].includes(sRole) && !addRoles.includes('CASHIER')) return false;
+        if (targetRole === 'HOSPITAL_ADMIN' && !['HOSPITAL_ADMIN', 'ADMIN'].includes(sRole) && !addRoles.includes('HOSPITAL_ADMIN')) return false;
+      }
+
+      if (term) {
+        return (
+          (staff.name || '').toLowerCase().includes(term) ||
+          (staff.email || '').toLowerCase().includes(term) ||
+          (staff.role || '').toLowerCase().includes(term) ||
+          (staff.specialization || '').toLowerCase().includes(term)
+        );
+      }
+      return true;
+    });
+  }, [staffList, roleFilter, searchTerm]);
+
+  const filteredPatients = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return patientList;
+    return patientList.filter((patient) => {
       return (
-        staff.name?.toLowerCase().includes(term) ||
-        staff.email?.toLowerCase().includes(term) ||
-        staff.role?.toLowerCase().includes(term) ||
-        staff.specialization?.toLowerCase().includes(term)
+        (patient.firstName || '').toLowerCase().includes(term) ||
+        (patient.lastName || '').toLowerCase().includes(term) ||
+        (patient.uhid || '').toLowerCase().includes(term) ||
+        (patient.phone || '').toLowerCase().includes(term)
       );
-    }
-    return true;
-  });
-
-  const filteredPatients = patientList.filter((patient) => {
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      return (
-        patient.firstName?.toLowerCase().includes(term) ||
-        patient.lastName?.toLowerCase().includes(term) ||
-        patient.uhid?.toLowerCase().includes(term) ||
-        patient.phone?.toLowerCase().includes(term)
-      );
-    }
-    return true;
-  });
+    });
+  }, [patientList, searchTerm]);
 
   const totalRevenue = stats.totalHospitalRevenue || hospital.totalHospitalRevenue || 0;
 

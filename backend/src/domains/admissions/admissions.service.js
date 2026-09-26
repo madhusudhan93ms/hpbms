@@ -115,12 +115,13 @@ export class AdmissionsService {
     const filter = { hospitalId: requireHospitalContext(user) };
 
     return await Admission.find(filter)
-      .populate('patientId')
+      .populate('patientId', 'firstName lastName uhid phone age gender dob emergencyContact bloodGroup address')
       .populate('doctorId', 'name specialization cabinNo phone')
       .populate('assignedNurseId', 'name role assignedUnit shiftDetails phone')
       .populate('assignedCaretakerId', 'name role assignedUnit shiftDetails phone')
       .populate({ path: 'bedId', populate: { path: 'assignedNurseId', select: 'name role assignedUnit shiftDetails phone' } })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean({ getters: true });
   }
 
   static async allocateBed(admissionId, data, user) {

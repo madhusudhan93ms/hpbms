@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StatCard } from '../../components/ui/StatCard';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -41,9 +41,13 @@ export const NurseDashboard = () => {
 
   useEffect(() => {
     if (!socket) return;
+    let refreshTimer = null;
     const refresh = () => {
-      fetchRequests();
-      fetchNurseTasks();
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        fetchRequests();
+        fetchNurseTasks();
+      }, 250);
     };
     socket.on('workflow:notification', refresh);
     socket.on('workflow:pending_changed', refresh);
@@ -53,6 +57,7 @@ export const NurseDashboard = () => {
     socket.on('request:created', refresh);
     socket.on('request:updated', refresh);
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
       socket.off('workflow:notification', refresh);
       socket.off('workflow:pending_changed', refresh);
       socket.off('workflow:new_nurse_tasks', refresh);
@@ -105,8 +110,34 @@ export const NurseDashboard = () => {
     }
   };
 
-  const pendingTasks = nurseTasks.filter((t) => ['PENDING', 'ACCEPTED', 'SCHEDULED'].includes(t.status));
-  const completedTasks = nurseTasks.filter((t) => t.status === 'ADMINISTERED');
+  const { pendingTasks, completedTasks, occupiedBedsCount, pendingRequestsCount } = useMemo(() => {
+    const pending = [];
+    const completed = [];
+    nurseTasks.forEach((t) => {
+      if (['PENDING', 'ACCEPTED', 'SCHEDULED'].includes(t.status)) {
+        pending.push(t);
+      } else if (t.status === 'ADMINISTERED') {
+        completed.push(t);
+      }
+    });
+
+    let occupiedBeds = 0;
+    beds.forEach((b) => {
+      if (b.status === 'OCCUPIED') occupiedBeds++;
+    });
+
+    let pendingReqs = 0;
+    requests.forEach((r) => {
+      if (r.status !== 'COMPLETED') pendingReqs++;
+    });
+
+    return {
+      pendingTasks: pending,
+      completedTasks: completed,
+      occupiedBedsCount: occupiedBeds,
+      pendingRequestsCount: pendingReqs,
+    };
+  }, [nurseTasks, beds, requests]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -122,7 +153,7 @@ export const NurseDashboard = () => {
         isAvailable={isAvailable}
         isToggling={isToggling}
         onToggle={handleToggle}
-        pendingCount={pendingTasks.length + requests.filter(r => r.status !== 'COMPLETED').length}
+        pendingCount={pendingTasks.length + pendingRequestsCount}
       />
 
       {statusMessage && (
@@ -132,10 +163,10 @@ export const NurseDashboard = () => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Ward Beds Occupied" value={`${beds.filter(b => b.status === 'OCCUPIED').length} Beds`} subtitle="Inpatient Ward Beds" icon={Bed} color="sky" />
+        <StatCard title="Ward Beds Occupied" value={`${occupiedBedsCount} Beds`} subtitle="Inpatient Ward Beds" icon={Bed} color="sky" />
         <StatCard title="Pending Nurse Treatments" value={`${pendingTasks.length} Tasks`} subtitle="Injections, IV Fluids & Dressings" icon={Syringe} color="indigo" />
         <StatCard title="Completed Today" value={`${completedTasks.length} Administered`} subtitle="Doses Logged" icon={CheckCircle2} color="emerald" />
-        <StatCard title="In-Progress Patient Calls" value={`${requests.filter(r => r.status !== 'COMPLETED').length} Calls`} subtitle="Bedside Requests" icon={Bell} color="amber" />
+        <StatCard title="In-Progress Patient Calls" value={`${pendingRequestsCount} Calls`} subtitle="Bedside Requests" icon={Bell} color="amber" />
       </div>
 
       {/* SECTION 1: Doctor-Prescribed Nurse Medication & Treatment Tasks */}

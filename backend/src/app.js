@@ -33,6 +33,7 @@ import { SaasService } from './domains/saas/saas.service.js';
 
 const app = express();
 
+app.set('trust proxy', 1);
 app.use(tenantModelContextMiddleware);
 app.use(helmet());
 app.use(

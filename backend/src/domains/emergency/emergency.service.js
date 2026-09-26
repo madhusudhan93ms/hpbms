@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Emergency } from '../../models/Emergency.js';
 import { Branch } from '../../models/Branch.js';
 import { Patient } from '../../models/Patient.js';
@@ -20,7 +21,9 @@ export class EmergencyService {
     let uhid = data.uhid || 'N/A';
 
     if (data.patientId) {
-      const patient = await Patient.findOne({ _id: data.patientId, hospitalId });
+      const patient = await Patient.findOne({ _id: data.patientId, hospitalId })
+        .select('firstName lastName uhid')
+        .lean();
       if (patient) {
         patientName = `${patient.firstName} ${patient.lastName}`;
         uhid = patient.uhid;
@@ -81,7 +84,6 @@ export class EmergencyService {
   }
 
   static async resolveEmergency(id, data, user) {
-    const mongoose = (await import('mongoose')).default;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ApiError(400, `Invalid emergency ID format: '${id}'. The ID must be a valid MongoDB ObjectId. Please reload the emergency console to fetch live data.`, null, 'INVALID_ID');
     }
@@ -141,7 +143,7 @@ export class EmergencyService {
     const filter = hospitalId
       ? { hospitalId, status: { $in: ['ACTIVE', 'RESPONDED'] } }
       : { status: { $in: ['ACTIVE', 'RESPONDED'] } };
-    return await Emergency.find(filter).sort({ createdAt: -1 });
+    return await Emergency.find(filter).sort({ createdAt: -1 }).lean({ getters: true });
   }
 
   static async getEmergencyHistory(user) {
@@ -149,6 +151,6 @@ export class EmergencyService {
       ? (user?.hospitalId?._id || user?.hospitalId || null)
       : requireHospitalContext(user);
     const filter = hospitalId ? { hospitalId } : {};
-    return await Emergency.find(filter).sort({ createdAt: -1 }).limit(100);
+    return await Emergency.find(filter).sort({ createdAt: -1 }).limit(100).lean({ getters: true });
   }
 }

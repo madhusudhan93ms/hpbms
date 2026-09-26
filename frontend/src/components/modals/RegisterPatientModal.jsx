@@ -3,7 +3,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { axiosClient } from '../../api/axiosClient';
 import { useScrollLock } from '../../hooks/useScrollLock';
-import { X, UserPlus, CheckCircle, AlertCircle, Phone, MapPin, Users, UserCheck, Ticket, Calendar } from 'lucide-react';
+import { X, UserPlus, CheckCircle, AlertCircle, Phone, MapPin, Users, UserCheck, Ticket, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 
 export const RegisterPatientModal = ({ isOpen, onClose, onSuccess, onIssueToken }) => {
   useScrollLock(isOpen);
@@ -28,6 +28,7 @@ export const RegisterPatientModal = ({ isOpen, onClose, onSuccess, onIssueToken 
   const [shouldIssueTokenImmediately, setShouldIssueTokenImmediately] = useState(false);
 
   const [duplicates, setDuplicates] = useState([]);
+  const [showGuardianSection, setShowGuardianSection] = useState(false);
   const [isExactDuplicate, setIsExactDuplicate] = useState(false);
 
   if (!isOpen) return null;
@@ -280,12 +281,11 @@ export const RegisterPatientModal = ({ isOpen, onClose, onSuccess, onIssueToken 
                 </div>
 
                 <Input
-                  label="Age (Years) *"
+                  label="Age (Years) (Optional)"
                   type="number"
                   value={formData.age}
                   onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                   placeholder="e.g. 35"
-                  required
                 />
 
                 <div>
@@ -369,31 +369,51 @@ export const RegisterPatientModal = ({ isOpen, onClose, onSuccess, onIssueToken 
               />
 
               {/* 6. Optional Guardian Information */}
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
-                    <UserCheck size={15} className="text-indigo-600" />
-                    Guardian / Attendant Information
-                  </h4>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
-                    OPTIONAL
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <Input
-                    label="Guardian / Relative Name (Optional)"
-                    value={formData.guardianName}
-                    onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })}
-                    placeholder="Guardian Name (Optional)"
-                  />
-                  <Input
-                    label="Guardian Mobile Number (Optional)"
-                    icon={Phone}
-                    value={formData.guardianPhone}
-                    onChange={(e) => setFormData({ ...formData, guardianPhone: e.target.value })}
-                    placeholder="+91 XXXXX XXXXX"
-                  />
-                </div>
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowGuardianSection(!showGuardianSection)}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 px-3 py-1.5 rounded-lg transition-all"
+                >
+                  {showGuardianSection ? (
+                    <>
+                      <ChevronUp size={14} /> Show Less (Hide Guardian Details)
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={14} /> Show More &bull; Guardian Details (Optional)
+                    </>
+                  )}
+                </button>
+
+                {showGuardianSection && (
+                  <div className="mt-2.5 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
+                        <UserCheck size={15} className="text-indigo-600" />
+                        Guardian / Attendant Information
+                      </h4>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                        OPTIONAL
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <Input
+                        label="Guardian / Relative Name (Optional)"
+                        value={formData.guardianName}
+                        onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })}
+                        placeholder="Guardian Name (Optional)"
+                      />
+                      <Input
+                        label="Guardian Mobile Number (Optional)"
+                        icon={Phone}
+                        value={formData.guardianPhone}
+                        onChange={(e) => setFormData({ ...formData, guardianPhone: e.target.value })}
+                        placeholder="+91 XXXXX XXXXX"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Submit Buttons */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useEmergencyStore } from '../../store/emergencyStore';
 import { useSocket } from '../../providers/SocketProvider';
@@ -22,19 +22,28 @@ export const EmergencyConsoleView = () => {
 
   useEffect(() => {
     if (!socket) return;
+    let alertTimer = null;
+    let resolveTimer = null;
+
     const handleEmergencyAlert = (data) => {
       if (data) {
         addEmergency(data);
       }
-      fetchActiveEmergencies();
+      if (alertTimer) clearTimeout(alertTimer);
+      alertTimer = setTimeout(() => {
+        fetchActiveEmergencies();
+      }, 250);
     };
 
     const handleEmergencyResolved = (data) => {
       if (data?.emergencyId || data?._id) {
         markResolved(data.emergencyId || data._id);
       }
-      fetchActiveEmergencies();
-      fetchHistory();
+      if (resolveTimer) clearTimeout(resolveTimer);
+      resolveTimer = setTimeout(() => {
+        fetchActiveEmergencies();
+        fetchHistory();
+      }, 250);
     };
 
     socket.on('emergency:alert', handleEmergencyAlert);
@@ -45,6 +54,8 @@ export const EmergencyConsoleView = () => {
     socket.on('workflow:emergency_resolved', handleEmergencyResolved);
 
     return () => {
+      if (alertTimer) clearTimeout(alertTimer);
+      if (resolveTimer) clearTimeout(resolveTimer);
       socket.off('emergency:alert', handleEmergencyAlert);
       socket.off('emergency:raised', handleEmergencyAlert);
       socket.off('emergency:code_blue_triggered', handleEmergencyAlert);
@@ -63,7 +74,9 @@ export const EmergencyConsoleView = () => {
     }
   };
 
-  const activeList = emergencies.filter((e) => e.status === 'ACTIVE' || e.status === 'RESPONDED');
+  const activeList = useMemo(() => {
+    return emergencies.filter((e) => e.status === 'ACTIVE' || e.status === 'RESPONDED');
+  }, [emergencies]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

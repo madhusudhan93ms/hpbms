@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { StatCard } from '../../components/ui/StatCard';
 import { axiosClient } from '../../api/axiosClient';
 import { useAuthStore } from '../../store/authStore';
+import { formatDateGB as formatDate } from '../../utils/formatters';
 import {
   User,
   Heart,
@@ -38,6 +39,37 @@ import {
   Mail,
   Wind,
 } from 'lucide-react';
+
+
+const PATIENT_TABS = [
+  { key: 'dashboard', label: 'Dashboard Overview', icon: Activity },
+  { key: 'profile', label: 'My Profile', icon: User },
+  { key: 'tokens', label: 'My Tokens', icon: Ticket },
+  { key: 'treatment', label: 'Current Treatment', icon: Heart },
+  { key: 'history', label: 'Treatment History', icon: Clock },
+  { key: 'prescriptions', label: 'Prescriptions', icon: Pill },
+  { key: 'lab-reports', label: 'Lab Reports', icon: TestTube },
+  { key: 'radiology-reports', label: 'Radiology Reports', icon: FileImage },
+  { key: 'admission', label: 'Admission & Bed', icon: BedDouble },
+  { key: 'care-team', label: 'Assigned Care Team', icon: Users },
+  { key: 'requests', label: 'Patient Requests', icon: Bell },
+  { key: 'billing', label: 'Billing & Ledgers', icon: Receipt },
+];
+
+const PATIENT_REQUEST_ITEMS = [
+  { type: 'WATER', label: 'Water Request' },
+  { type: 'FOOD', label: 'Food / Meal' },
+  { type: 'RESTROOM', label: 'Restroom Assist' },
+  { type: 'MEDICINE', label: 'Medicine Check' },
+  { type: 'INJECTION', label: 'Injection Assist' },
+  { type: 'IV_DRIP', label: 'IV Drip Change' },
+  { type: 'URINE_BAG', label: 'Urine Bag Check' },
+  { type: 'CATHETER', label: 'Catheter Check' },
+  { type: 'BED_POSITION', label: 'Bed Adjustment' },
+  { type: 'CLEANING', label: 'Room Cleaning' },
+  { type: 'PAIN_ASSISTANCE', label: 'Pain Assistance' },
+  { type: 'DOCTOR', label: 'Request Doctor' },
+];
 
 export const PatientDashboard = ({ activeTab = 'dashboard' }) => {
   const { user } = useAuthStore();
@@ -226,26 +258,41 @@ export const PatientDashboard = ({ activeTab = 'dashboard' }) => {
     }
   };
 
-  const patient = dashboardData?.patient || {};
-  const careTeam = dashboardData?.careTeam || {};
-  const admission = dashboardData?.admissionDetails || null;
-  const latestConsultation = dashboardData?.latestConsultation || null;
-  const latestOpdToken = dashboardData?.activeOpdToken || null;
-  const activeDoctor = careTeam?.doctor || latestConsultation?.doctorId || latestOpdToken?.doctorId || null;
+  const {
+    patient,
+    careTeam,
+    admission,
+    latestConsultation,
+    latestOpdToken,
+    doctorDisplayName,
+    doctorSpecialization,
+    doctorCabin,
+  } = React.useMemo(() => {
+    const p = dashboardData?.patient || {};
+    const ct = dashboardData?.careTeam || {};
+    const adm = dashboardData?.admissionDetails || null;
+    const lc = dashboardData?.latestConsultation || null;
+    const lt = dashboardData?.activeOpdToken || null;
+    const doc = ct?.doctor || lc?.doctorId || lt?.doctorId || null;
 
-  const doctorDisplayName = activeDoctor?.name
-    ? (activeDoctor.name.startsWith('Dr.') ? activeDoctor.name : `Dr. ${activeDoctor.name}`)
-    : (activeDoctor ? `Dr. ${activeDoctor}` : 'Dr. Madhu');
+    const docName = doc?.name
+      ? (doc.name.startsWith('Dr.') ? doc.name : `Dr. ${doc.name}`)
+      : (doc ? `Dr. ${doc}` : 'Dr. Madhu');
 
-  const doctorSpecialization = activeDoctor?.specialization || 'General Medicine';
-  const doctorCabin = activeDoctor?.cabinNo || 'Cabin 101';
+    const docSpec = doc?.specialization || 'General Medicine';
+    const docCab = doc?.cabinNo || 'Cabin 101';
 
-  const formatDate = (d) => {
-    if (!d) return '—';
-    const parsed = new Date(d);
-    if (isNaN(parsed.getTime())) return '—';
-    return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
+    return {
+      patient: p,
+      careTeam: ct,
+      admission: adm,
+      latestConsultation: lc,
+      latestOpdToken: lt,
+      doctorDisplayName: docName,
+      doctorSpecialization: docSpec,
+      doctorCabin: docCab,
+    };
+  }, [dashboardData]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -366,20 +413,7 @@ export const PatientDashboard = ({ activeTab = 'dashboard' }) => {
 
       {/* Sub-Tab Navigation Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 text-xs font-bold scrollbar-none">
-        {[
-          { key: 'dashboard', label: 'Dashboard Overview', icon: Activity },
-          { key: 'profile', label: 'My Profile', icon: User },
-          { key: 'tokens', label: 'My Tokens', icon: Ticket },
-          { key: 'treatment', label: 'Current Treatment', icon: Heart },
-          { key: 'history', label: 'Treatment History', icon: Clock },
-          { key: 'prescriptions', label: 'Prescriptions', icon: Pill },
-          { key: 'lab-reports', label: 'Lab Reports', icon: TestTube },
-          { key: 'radiology-reports', label: 'Radiology Reports', icon: FileImage },
-          { key: 'admission', label: 'Admission & Bed', icon: BedDouble },
-          { key: 'care-team', label: 'Assigned Care Team', icon: Users },
-          { key: 'requests', label: 'Patient Requests', icon: Bell },
-          { key: 'billing', label: 'Billing & Ledgers', icon: Receipt },
-        ].map((tab) => {
+        {PATIENT_TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.key;
           return (
@@ -1140,20 +1174,7 @@ export const PatientDashboard = ({ activeTab = 'dashboard' }) => {
               Select request type. Nurse requests route to Ward Nurse; Water &amp; Food route to Caretaker.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              {[
-                { type: 'WATER', label: 'Water Request' },
-                { type: 'FOOD', label: 'Food / Meal' },
-                { type: 'RESTROOM', label: 'Restroom Assist' },
-                { type: 'MEDICINE', label: 'Medicine Check' },
-                { type: 'INJECTION', label: 'Injection Assist' },
-                { type: 'IV_DRIP', label: 'IV Drip Change' },
-                { type: 'URINE_BAG', label: 'Urine Bag Check' },
-                { type: 'CATHETER', label: 'Catheter Check' },
-                { type: 'BED_POSITION', label: 'Bed Adjustment' },
-                { type: 'CLEANING', label: 'Room Cleaning' },
-                { type: 'PAIN_ASSISTANCE', label: 'Pain Assistance' },
-                { type: 'DOCTOR', label: 'Request Doctor' },
-              ].map((item) => (
+              {PATIENT_REQUEST_ITEMS.map((item) => (
                 <Button
                   key={item.type}
                   variant="glass"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { StatCard } from '../../components/ui/StatCard';
 import { Card } from '../../components/ui/Card';
@@ -75,8 +75,12 @@ export const NurseInchargeDashboard = () => {
 
   useEffect(() => {
     if (!socket) return;
+    let updateTimer = null;
     const handleUpdate = () => {
-      fetchData();
+      if (updateTimer) clearTimeout(updateTimer);
+      updateTimer = setTimeout(() => {
+        fetchData();
+      }, 250);
     };
     socket.on('admission:requisition_created', handleUpdate);
     socket.on('admission:confirmed', handleUpdate);
@@ -88,6 +92,7 @@ export const NurseInchargeDashboard = () => {
     socket.on('request:created', handleUpdate);
     socket.on('request:updated', handleUpdate);
     return () => {
+      if (updateTimer) clearTimeout(updateTimer);
       socket.off('admission:requisition_created', handleUpdate);
       socket.off('admission:confirmed', handleUpdate);
       socket.off('workflow:pending_changed', handleUpdate);
@@ -148,26 +153,86 @@ export const NurseInchargeDashboard = () => {
   };
 
   // Metrics
-  const pendingRequisitions = admissions.filter((a) => a.status === 'REQUISITION_RAISED' || a.status === 'ADMISSION_REQUESTED');
-  const admittedInpatients = admissions.filter((a) => a.status === 'ADMITTED');
-  const occupiedBedsCount = beds.filter((b) => b.status === 'OCCUPIED').length;
-  const availableBedsCount = beds.filter((b) => b.status === 'AVAILABLE').length;
-  const pendingPatientRequests = patientRequests.filter((r) => r.status !== 'COMPLETED');
-  const pendingNurseTasks = nurseTasks.filter((t) => t.status !== 'ADMINISTERED');
-  const completedNurseTasks = nurseTasks.filter((t) => t.status === 'ADMINISTERED');
+  const {
+    pendingRequisitions,
+    admittedInpatients,
+    occupiedBedsCount,
+    availableBedsCount,
+    pendingPatientRequests,
+    pendingNurseTasks,
+    completedNurseTasks,
+  } = useMemo(() => {
+    const pReq = [];
+    const admIn = [];
+    admissions.forEach((a) => {
+      if (a.status === 'REQUISITION_RAISED' || a.status === 'ADMISSION_REQUESTED') {
+        pReq.push(a);
+      } else if (a.status === 'ADMITTED') {
+        admIn.push(a);
+      }
+    });
+
+    let occBeds = 0;
+    let availBeds = 0;
+    beds.forEach((b) => {
+      if (b.status === 'OCCUPIED') occBeds++;
+      else if (b.status === 'AVAILABLE') availBeds++;
+    });
+
+    const pRequests = patientRequests.filter((r) => r.status !== 'COMPLETED');
+    const pTasks = [];
+    const cTasks = [];
+    nurseTasks.forEach((t) => {
+      if (t.status === 'ADMINISTERED') {
+        cTasks.push(t);
+      } else {
+        pTasks.push(t);
+      }
+    });
+
+    return {
+      pendingRequisitions: pReq,
+      admittedInpatients: admIn,
+      occupiedBedsCount: occBeds,
+      availableBedsCount: availBeds,
+      pendingPatientRequests: pRequests,
+      pendingNurseTasks: pTasks,
+      completedNurseTasks: cTasks,
+    };
+  }, [admissions, beds, patientRequests, nurseTasks]);
 
   // Filtered lists
-  const matchesPatientSearch = (a) => {
-    const search = searchTerm.toLowerCase();
-    const patient = a.patientId || {};
-    return [
-      a.patientName, a.uhid, a.bedNumber, a.targetWardName, a.doctorName,
-      patient.phone, patient.email, patient.bloodGroup, patient.category,
-    ].some((value) => String(value || '').toLowerCase().includes(search));
-  };
+  const filteredRequisitions = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return pendingRequisitions;
+    return pendingRequisitions.filter((a) => {
+      const patient = a.patientId || {};
+      return [
+        a.patientName, a.uhid, a.bedNumber, a.targetWardName, a.doctorName,
+        patient.phone, patient.email, patient.bloodGroup, patient.category,
+      ].some((value) => String(value || '').toLowerCase().includes(search));
+    });
+  }, [pendingRequisitions, searchTerm]);
 
-  const filteredRequisitions = pendingRequisitions.filter(matchesPatientSearch);
-  const filteredAdmitted = admittedInpatients.filter(matchesPatientSearch);
+  const filteredAdmitted = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return admittedInpatients;
+    return admittedInpatients.filter((a) => {
+      const patient = a.patientId || {};
+      return [
+        a.patientName, a.uhid, a.bedNumber, a.targetWardName, a.doctorName,
+        patient.phone, patient.email, patient.bloodGroup, patient.category,
+      ].some((value) => String(value || '').toLowerCase().includes(search));
+    });
+  }, [admittedInpatients, searchTerm]);
+
+  const displayedTasks = useMemo(() => {
+    return nurseTasks.filter((t) => {
+      if (taskFilter === 'PENDING') return t.status !== 'ADMINISTERED';
+      if (taskFilter === 'COMPLETED') return t.status === 'ADMINISTERED';
+      return true;
+    });
+  }, [nurseTasks, taskFilter]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -613,24 +678,14 @@ export const NurseInchargeDashboard = () => {
           </div>
 
           <div className="space-y-3 text-xs">
-            {(() => {
-              const displayedTasks = nurseTasks.filter((t) => {
-                if (taskFilter === 'PENDING') return t.status !== 'ADMINISTERED';
-                if (taskFilter === 'COMPLETED') return t.status === 'ADMINISTERED';
-                return true;
-              });
-
-              if (displayedTasks.length === 0) {
-                return (
-                  <div className="p-8 text-center text-slate-400">
-                    {taskFilter === 'PENDING'
-                      ? 'No pending treatment tasks. All prescribed medications and injections have been administered!'
-                      : 'No records found for this filter.'}
-                  </div>
-                );
-              }
-
-              return displayedTasks.map((t) => (
+            {displayedTasks.length === 0 ? (
+              <div className="p-8 text-center text-slate-400">
+                {taskFilter === 'PENDING'
+                  ? 'No pending treatment tasks. All prescribed medications and injections have been administered!'
+                  : 'No records found for this filter.'}
+              </div>
+            ) : (
+              displayedTasks.map((t) => (
                 <div
                   key={t._id}
                   id={`nurse-task-${t._id}`}
@@ -716,8 +771,8 @@ export const NurseInchargeDashboard = () => {
                     </div>
                   )}
                 </div>
-              ));
-            })()}
+              ))
+            )}
           </div>
         </Card>
       )}

@@ -8,6 +8,35 @@ import { HospitalNotFoundPage } from "../../pages/HospitalNotFoundPage";
 export const verifiedDomainCache = new Set();
 export const notFoundDomainCache = new Set();
 
+export const getEffectiveUserRoles = (user) => {
+  if (!user) return [];
+  const roles = new Set([
+    user.role,
+    ...(Array.isArray(user.additionalRoles) ? user.additionalRoles : []),
+  ].filter(Boolean));
+
+  // If user is a Hospital Admin and availability is active, expand roles from adminDepartmentAvailability
+  if (user.role === 'HOSPITAL_ADMIN' && user.isAvailable !== false && user.adminDepartmentAvailability) {
+    const deptMap = {
+      DOCTOR: ['DOCTOR'],
+      RECEPTIONIST: ['RECEPTIONIST', 'OPD_STAFF'],
+      CASHIER: ['CASHIER', 'BILLING_STAFF'],
+      PHARMACIST: ['PHARMACIST', 'PHARMACY_STAFF'],
+      LAB_TECH: ['LAB_TECH', 'LABORATORY_STAFF'],
+      RADIOLOGIST: ['RADIOLOGIST', 'RADIOLOGY_STAFF'],
+      NURSE: ['NURSE', 'NURSE_INCHARGE', 'IPD_STAFF'],
+      EMERGENCY_STAFF: ['EMERGENCY_STAFF'],
+    };
+    Object.entries(user.adminDepartmentAvailability).forEach(([dept, isEnabled]) => {
+      if (isEnabled && deptMap[dept]) {
+        deptMap[dept].forEach((r) => roles.add(r));
+      }
+    });
+  }
+
+  return Array.from(roles);
+};
+
 export const TenantRouteGuard = ({ children, allowedRoles = [] }) => {
   const { hospitalDomain } = useParams();
   const { user, isAuthenticated, isLoading } = useAuthStore();
@@ -106,12 +135,13 @@ export const TenantRouteGuard = ({ children, allowedRoles = [] }) => {
     return <Navigate to={targetLogin} state={{ from: location, tenantMismatch: true }} replace />;
   }
 
-  // Role validation — check primary role AND any additional roles
-  const userAllRoles = [user.role, ...(Array.isArray(user.additionalRoles) ? user.additionalRoles : [])].filter(Boolean);
+
+  // Role validation — check primary role AND any additional roles (including active department availability)
+  const userAllRoles = getEffectiveUserRoles(user);
+  const additionalRoles = userAllRoles.filter((r) => r !== user.role);
   const operationalPrefixes = ['/doctor/', '/nurse/', '/nursing/', '/nurse-incharge/', '/reception/', '/pharmacy/', '/laboratory/', '/radiology/', '/billing/', '/inventory/', '/hr/'];
   const isOperationalRoute = operationalPrefixes.some((prefix) => location.pathname.includes(prefix));
   const operationalAllowedRoles = allowedRoles.filter((role) => !['HOSPITAL_ADMIN', 'SUPER_ADMIN'].includes(role));
-  const additionalRoles = Array.isArray(user.additionalRoles) ? user.additionalRoles : [];
   if (isOperationalRoute && user.role === 'HOSPITAL_ADMIN' && !operationalAllowedRoles.some((role) => additionalRoles.includes(role))) {
     return <Navigate to="/403" replace />;
   }

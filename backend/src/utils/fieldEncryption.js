@@ -38,21 +38,26 @@ export const encryptField = (value) => {
 
 export const decryptField = (value) => {
   if (!isEncrypted(value)) return value;
-  const key = encryptionKey();
-  if (!key) throw new Error('FIELD_ENCRYPTION_KEY is required to decrypt protected data');
+  try {
+    const key = encryptionKey();
+    if (!key) return value;
 
-  const parts = value.split(':');
-  if (parts.length !== 5 || parts[0] !== 'enc' || parts[1] !== 'v1') {
-    throw new Error('Encrypted field has an invalid format');
+    const parts = value.split(':');
+    if (parts.length !== 5 || parts[0] !== 'enc' || parts[1] !== 'v1') {
+      return value;
+    }
+
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(parts[2], 'base64'));
+    decipher.setAuthTag(Buffer.from(parts[3], 'base64'));
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(parts[4], 'base64')),
+      decipher.final(),
+    ]);
+    return JSON.parse(plaintext.toString('utf8'));
+  } catch (error) {
+    console.warn('[FieldEncryption] Decryption failed gracefully:', error.message);
+    return value;
   }
-
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(parts[2], 'base64'));
-  decipher.setAuthTag(Buffer.from(parts[3], 'base64'));
-  const plaintext = Buffer.concat([
-    decipher.update(Buffer.from(parts[4], 'base64')),
-    decipher.final(),
-  ]);
-  return JSON.parse(plaintext.toString('utf8'));
 };
 
 export const createBlindIndex = (value) => {

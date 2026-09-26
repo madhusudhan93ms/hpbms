@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { StatCard } from '../../components/ui/StatCard';
 import { Card } from '../../components/ui/Card';
@@ -158,23 +158,28 @@ export const PharmacistDashboard = () => {
   // Socket: refresh pending prescriptions in real-time when new ones arrive or doctor responds
   useEffect(() => {
     if (!socket) return;
-    const refresh = () => {
-      fetchData();
-      refreshPendingWork();
+    let debounceTimer = null;
+    const debouncedRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchData();
+        refreshPendingWork();
+      }, 250);
     };
-    socket.on('pharmacy:new_prescription', refresh);
-    socket.on('prescription:created', refresh);
-    socket.on('pharmacy:prescription_returned', refresh);
-    socket.on('pharmacy:substitution_responded', refresh);
-    socket.on('workflow:notification', refresh);
-    socket.on('workflow:pending_changed', refresh);
+    socket.on('pharmacy:new_prescription', debouncedRefresh);
+    socket.on('prescription:created', debouncedRefresh);
+    socket.on('pharmacy:prescription_returned', debouncedRefresh);
+    socket.on('pharmacy:substitution_responded', debouncedRefresh);
+    socket.on('workflow:notification', debouncedRefresh);
+    socket.on('workflow:pending_changed', debouncedRefresh);
     return () => {
-      socket.off('pharmacy:new_prescription', refresh);
-      socket.off('prescription:created', refresh);
-      socket.off('pharmacy:prescription_returned', refresh);
-      socket.off('pharmacy:substitution_responded', refresh);
-      socket.off('workflow:notification', refresh);
-      socket.off('workflow:pending_changed', refresh);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      socket.off('pharmacy:new_prescription', debouncedRefresh);
+      socket.off('prescription:created', debouncedRefresh);
+      socket.off('pharmacy:prescription_returned', debouncedRefresh);
+      socket.off('pharmacy:substitution_responded', debouncedRefresh);
+      socket.off('workflow:notification', debouncedRefresh);
+      socket.off('workflow:pending_changed', debouncedRefresh);
     };
   }, [socket, refreshPendingWork]);
 
@@ -188,8 +193,14 @@ export const PharmacistDashboard = () => {
     }
   }, [requestedPrescriptionId, prescriptions, billingPrescription]);
 
-  const pending = prescriptions.filter((item) => item.dispenseStatus === 'PENDING_DISPENSE' || item.dispenseStatus === 'PARTIALLY_DISPENSED' || item.dispenseStatus === 'PENDING');
-  const dispensed = prescriptions.filter((item) => item.dispenseStatus === 'DISPENSED');
+  const pending = useMemo(
+    () => prescriptions.filter((item) => item.dispenseStatus === 'PENDING_DISPENSE' || item.dispenseStatus === 'PARTIALLY_DISPENSED' || item.dispenseStatus === 'PENDING'),
+    [prescriptions]
+  );
+  const dispensed = useMemo(
+    () => prescriptions.filter((item) => item.dispenseStatus === 'DISPENSED'),
+    [prescriptions]
+  );
 
   const handleAcknowledgeSub = async (id) => {
     try {
@@ -452,34 +463,42 @@ export const PharmacistDashboard = () => {
     };
   }, [medicines]);
 
-  const filteredMedicines = medicines.filter(
-    (m) =>
-      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.genericName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMedicines = useMemo(() => {
+    const s = searchTerm.trim().toLowerCase();
+    if (!s) return medicines;
+    return medicines.filter((m) => {
+      const name = (m.name || '').toLowerCase();
+      const generic = (m.genericName || '').toLowerCase();
+      const cat = (m.category || '').toLowerCase();
+      return name.includes(s) || generic.includes(s) || cat.includes(s);
+    });
+  }, [medicines, searchTerm]);
 
-  const inventoryFilteredMedicines = medicines.filter((m) => {
-    const matchesSearch =
-      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.genericName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.category.toLowerCase().includes(searchTerm.toLowerCase());
-    if (!matchesSearch) return false;
+  const inventoryFilteredMedicines = useMemo(() => {
+    const s = searchTerm.trim().toLowerCase();
+    return medicines.filter((m) => {
+      if (s) {
+        const name = (m.name || '').toLowerCase();
+        const generic = (m.genericName || '').toLowerCase();
+        const cat = (m.category || '').toLowerCase();
+        if (!name.includes(s) && !generic.includes(s) && !cat.includes(s)) return false;
+      }
 
-    const qty = m.totalQuantity || 0;
-    const min = m.minimumStockLevel || 20;
+      const qty = m.totalQuantity || 0;
+      const min = m.minimumStockLevel || 20;
 
-    if (inventorySubTab === 'prediction') {
-      return qty <= min * 1.5;
-    }
-    if (inventorySubTab === 'in_stock') {
-      return qty > 0;
-    }
-    if (inventorySubTab === 'out_of_stock') {
-      return qty === 0;
-    }
-    return true;
-  });
+      if (inventorySubTab === 'prediction') {
+        return qty <= min * 1.5;
+      }
+      if (inventorySubTab === 'in_stock') {
+        return qty > 0;
+      }
+      if (inventorySubTab === 'out_of_stock') {
+        return qty === 0;
+      }
+      return true;
+    });
+  }, [medicines, searchTerm, inventorySubTab]);
 
   return (
     <div className="space-y-5 animate-fade-in">

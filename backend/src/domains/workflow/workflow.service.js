@@ -110,7 +110,7 @@ export class WorkflowService {
             ...docQuery,
             status: { $in: ['WAITING', 'IN_CONSULTATION'] },
             departmentReturnedAt: null,
-          }).populate('patientId').lean(),
+          }).populate('patientId', 'firstName lastName uhid').lean(),
           DiagnosticOrder.find({
             ...scope,
             ...docQuery,
@@ -118,27 +118,27 @@ export class WorkflowService {
             reviewedAt: null,
             chargeStatus: { $nin: ['CANCELLED', 'APPROVED', 'INCLUDED_IN_FINAL_BILL'] },
           }).populate('appointmentId').lean(),
-          PatientRequest.find({ ...scope, requestCategory: 'DOCTOR', status: { $in: ACTIVE_REQUEST_STATUSES }, ...(docId ? { $or: [{ assignedDoctorId: docId }, { assignedDoctorId: null }] } : { assignedDoctorId: null }) }).populate('patientId').lean(),
-          PharmacySubstitutionRequest.find({ ...scope, ...docQuery, status: 'PENDING' }).populate('patientId').lean(),
+          PatientRequest.find({ ...scope, requestCategory: 'DOCTOR', status: { $in: ACTIVE_REQUEST_STATUSES }, ...(docId ? { $or: [{ assignedDoctorId: docId }, { assignedDoctorId: null }] } : { assignedDoctorId: null }) }).populate('patientId', 'firstName lastName uhid').lean(),
+          PharmacySubstitutionRequest.find({ ...scope, ...docQuery, status: 'PENDING' }).populate('patientId', 'firstName lastName uhid').lean(),
           NurseTask.find({
             ...scope,
             ...docQuery,
             status: 'ADMINISTERED',
             doctorReviewedAt: null,
             isResolved: { $ne: true },
-          }).populate('patientId').populate('appointmentId').lean(),
+          }).populate('patientId', 'firstName lastName uhid').populate('appointmentId').lean(),
           Invoice.find({
             ...scope,
             ...(docId ? { 'doctorReviewQuery.attendingDoctorId': docId } : {}),
             'doctorReviewQuery.resolved': false,
             isDeleted: { $ne: true },
-          }).populate('patientId').lean(),
+          }).populate('patientId', 'firstName lastName uhid').lean(),
           Prescription.find({
             ...scope,
             ...docQuery,
             dispenseStatus: 'RETURNED_TO_DOCTOR',
             'billingQuery.resolved': false,
-          }).populate('patientId').lean(),
+          }).populate('patientId', 'firstName lastName uhid').lean(),
         ]);
 
         appointments.forEach((item) => item && tasks.push(task('DOCTOR_PATIENT', item, '/doctor/dashboard', `Patient waiting: ${item.patientId?.firstName || ''} ${item.patientId?.lastName || ''}`.trim(), { targetModule: 'doctor', patientName: `${item.patientId?.firstName || ''} ${item.patientId?.lastName || ''}`.trim(), uhid: item.patientId?.uhid })));
@@ -181,7 +181,7 @@ export class WorkflowService {
               { 'doctorReviewQuery.query': null },
               { 'doctorReviewQuery.query': { $exists: false } },
             ],
-          }).populate('patientId').lean();
+          }).populate('patientId', 'firstName lastName uhid').lean();
           records
             .filter((item) => !pendingPatientIds.has(String(item.patientId?._id || item.patientId)))
             .forEach((item) => item && tasks.push(task('BILLING_WORK', item, '/billing/dashboard', `Collect payment: ${item.invoiceNo || 'Invoice'}`, { targetModule: 'billing', patientName: `${item.patientId?.firstName || ''} ${item.patientId?.lastName || ''}`.trim(), uhid: item.patientId?.uhid, message: `Balance: ${item.balanceAmount || 0}` })));
@@ -198,7 +198,7 @@ export class WorkflowService {
       }
 
       if (Array.from(userRoles).some((r) => ['PHARMACIST', 'PHARMACY_STAFF'].includes(r))) {
-          const prescriptions = await Prescription.find({ ...scope, dispenseStatus: { $in: ['PENDING_DISPENSE', 'PARTIALLY_DISPENSED'] } }).populate('patientId').lean();
+          const prescriptions = await Prescription.find({ ...scope, dispenseStatus: { $in: ['PENDING_DISPENSE', 'PARTIALLY_DISPENSED'] } }).populate('patientId', 'firstName lastName uhid').lean();
           prescriptions.forEach((item) => item && tasks.push(task('PHARMACY_WORK', item, '/pharmacy/dashboard', `Dispense prescription: ${item.prescriptionNo || 'Rx'}`, { targetModule: 'pharmacy', status: item.dispenseStatus, patientName: `${item.patientId?.firstName || ''} ${item.patientId?.lastName || ''}`.trim(), uhid: item.patientId?.uhid })));
       }
 
@@ -208,7 +208,7 @@ export class WorkflowService {
             filter.$or = [{ assignedNurseId: userId }, { assignedNurseId: null }];
           }
           const [records, admissions, emergencies, nurseTasks, admittedInpatients, totalBeds] = await Promise.all([
-            PatientRequest.find(filter).populate('patientId').lean(),
+            PatientRequest.find(filter).populate('patientId', 'firstName lastName uhid').lean(),
             Admission.find({ ...scope, status: { $in: ['ADMISSION_REQUESTED', 'REQUISITION_RAISED'] } }).lean(),
             Emergency.find({ ...scope, status: { $in: ['ACTIVE', 'RESPONDED'] } }).lean(),
             NurseTask.find({ ...scope, status: { $in: ['PENDING', 'ACCEPTED', 'SCHEDULED', 'DELAYED'] } }).lean(),
@@ -222,12 +222,12 @@ export class WorkflowService {
       }
 
       if (Array.from(userRoles).some((r) => ['RECEPTIONIST', 'OPD_STAFF', 'FRONT_DESK'].includes(r))) {
-          const records = await Appointment.find({ ...scope, status: 'BOOKED' }).populate('patientId').lean();
+          const records = await Appointment.find({ ...scope, status: 'BOOKED' }).populate('patientId', 'firstName lastName uhid').lean();
           records.forEach((item) => item && tasks.push(task('RECEPTION_WORK', item, '/reception/registered-patients', `Appointment booked: ${item.patientId?.firstName || ''}`, { targetModule: 'reception', patientName: `${item.patientId?.firstName || ''} ${item.patientId?.lastName || ''}`.trim(), uhid: item.patientId?.uhid })));
       }
 
       if (userRoles.has('HOSPITAL_ADMIN')) {
-          const records = await GuardianLink.find({ ...(hospitalId ? { hospitalId } : {}), accessStatus: 'PENDING' }).populate('patientId').lean();
+          const records = await GuardianLink.find({ ...(hospitalId ? { hospitalId } : {}), accessStatus: 'PENDING' }).populate('patientId', 'firstName lastName uhid').lean();
           records.forEach((item) => item && tasks.push(task('ADMIN_APPROVAL', item, '/hospital-admin/dashboard?tab=notifications', 'Guardian access approval', { targetModule: 'dashboard', patientName: `${item.patientId?.firstName || ''} ${item.patientId?.lastName || ''}`.trim(), uhid: item.patientId?.uhid, status: item.accessStatus })));
       }
 

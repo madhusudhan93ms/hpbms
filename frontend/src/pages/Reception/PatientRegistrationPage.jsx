@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -26,6 +26,8 @@ import {
   UserCheck,
   History,
   Eye,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export const PatientRegistrationPage = () => {
@@ -57,6 +59,7 @@ export const PatientRegistrationPage = () => {
     guardianPhone: '',
     guardianRelationship: 'FATHER',
   });
+  const [showGuardianSection, setShowGuardianSection] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -136,13 +139,17 @@ export const PatientRegistrationPage = () => {
     }
   };
 
-  const filteredPatients = recentPatients.filter(
-    (p) =>
-      p.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.lastName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.uhid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.phone?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredPatients = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return recentPatients;
+    return recentPatients.filter(
+      (p) =>
+        p.firstName?.toLowerCase().includes(q) ||
+        p.lastName?.toLowerCase().includes(q) ||
+        p.uhid?.toLowerCase().includes(q) ||
+        p.phone?.toLowerCase().includes(q)
+    );
+  }, [recentPatients, searchQuery]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -333,12 +340,11 @@ export const PatientRegistrationPage = () => {
                 </div>
 
                 <Input
-                  label="Age *"
+                  label="Age (Optional)"
                   type="number"
                   value={formData.age}
                   onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                   placeholder="35"
-                  required
                 />
 
                 <div>
@@ -422,22 +428,40 @@ export const PatientRegistrationPage = () => {
                 />
               </div>
 
-              {/* Guardian / Attendant Section (Optional for Inpatient / Minors) */}
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
-                    <UserCheck size={16} className="text-indigo-600" />
-                    Guardian / Attendant Information
-                  </h4>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
-                    OPTIONAL (NOT REQUIRED FOR OPD)
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Optional. Only needed if patient is being recommended for IPD inpatient stay or for minor patients.
-                </p>
+              {/* Guardian / Attendant Section (Optional) */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowGuardianSection(!showGuardianSection)}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 px-3 py-1.5 rounded-lg transition-all"
+                >
+                  {showGuardianSection ? (
+                    <>
+                      <ChevronUp size={14} /> Show Less (Hide Guardian Details)
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={14} /> Show More &bull; Guardian Details (Optional)
+                    </>
+                  )}
+                </button>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                {showGuardianSection && (
+                  <div className="mt-2.5 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
+                        <UserCheck size={16} className="text-indigo-600" />
+                        Guardian / Attendant Information
+                      </h4>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                        OPTIONAL (NOT REQUIRED FOR OPD)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Optional. Only needed if patient is being recommended for IPD inpatient stay or for minor patients.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                   <Input
                     label="Guardian / Relative Name (Optional)"
                     value={formData.guardianName}
@@ -471,6 +495,8 @@ export const PatientRegistrationPage = () => {
                   </div>
                 </div>
               </div>
+            )}
+          </div>
 
               {/* Action Buttons */}
               <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-end gap-3">

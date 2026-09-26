@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../ui/Button';
 import { useScrollLock } from '../../hooks/useScrollLock';
+import { formatDateGB } from '../../utils/formatters';
 import {
   X,
   User,
@@ -31,15 +32,11 @@ export const PatientDetailsModal = ({
 
   if (!isOpen || !patient) return null;
 
+  // Thin wrapper: shared formatDateGB returns '—' for missing dates; map to 'Not Recorded' for UI consistency
   const formatDate = (dateVal) => {
-    if (!dateVal) return 'Not Recorded';
-    const d = new Date(dateVal);
-    if (isNaN(d.getTime())) return 'Invalid Date';
-    return d.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+    const result = formatDateGB(dateVal);
+    if (result === '—') return dateVal ? 'Invalid Date' : 'Not Recorded';
+    return result;
   };
 
   const formatIsoDob = (dateVal) => {

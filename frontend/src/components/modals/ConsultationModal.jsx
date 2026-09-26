@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { axiosClient } from '../../api/axiosClient';
@@ -229,17 +229,22 @@ export const ConsultationModal = ({ isOpen, onClose, token, patient, onSuccess, 
 
   useEffect(() => {
     if (!socket || !isOpen) return;
+    let timer = null;
     const handleUpdate = (data) => {
       const patId = activePatient?._id || activePatient?.id;
-      if (data.patientId === patId || data.patientId?._id === patId) {
-        fetchDepartmentOrders();
-        fetchPharmacyBilled();
+      if (data?.patientId === patId || data?.patientId?._id === patId) {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          fetchDepartmentOrders();
+          fetchPharmacyBilled();
+        }, 250);
       }
     };
     socket.on('investigation:status_updated', handleUpdate);
     socket.on('diagnostics:report_ready', handleUpdate);
     socket.on('pharmacy:billing_sent_to_doctor', handleUpdate);
     return () => {
+      if (timer) clearTimeout(timer);
       socket.off('investigation:status_updated', handleUpdate);
       socket.off('diagnostics:report_ready', handleUpdate);
       socket.off('pharmacy:billing_sent_to_doctor', handleUpdate);
@@ -249,26 +254,53 @@ export const ConsultationModal = ({ isOpen, onClose, token, patient, onSuccess, 
 
   if (!isOpen || !token) return null;
 
-  const pendingOrders = departmentOrders.filter(
-    (ord) => ['REQUESTED', 'DEPARTMENT_RECEIVED', 'ACCEPTED', 'IN_PROGRESS'].includes(ord.status) && ord.chargeStatus !== 'CANCELLED'
-  );
-  const hasPendingOrders = pendingOrders.length > 0;
+  const { pendingOrders, hasPendingOrders, completedDeptOrders, totalDepartmentCharges } = useMemo(() => {
+    const pending = [];
+    const completed = [];
+    let deptCharges = 0;
+    departmentOrders.forEach((ord) => {
+      if (ord.chargeStatus === 'CANCELLED') return;
+      if (['REQUESTED', 'DEPARTMENT_RECEIVED', 'ACCEPTED', 'IN_PROGRESS'].includes(ord.status)) {
+        pending.push(ord);
+      } else if (['REPORT_UPLOADED', 'COMPLETED', 'DOCTOR_REVIEW'].includes(ord.status)) {
+        completed.push(ord);
+        deptCharges += (ord.totalDepartmentCharge || ord.price || 0);
+      }
+    });
+    return {
+      pendingOrders: pending,
+      hasPendingOrders: pending.length > 0,
+      completedDeptOrders: completed,
+      totalDepartmentCharges: deptCharges,
+    };
+  }, [departmentOrders]);
 
-  const completedDeptOrders = departmentOrders.filter(
-    (ord) => ['REPORT_UPLOADED', 'COMPLETED', 'DOCTOR_REVIEW'].includes(ord.status) && ord.chargeStatus !== 'CANCELLED'
-  );
-  const totalDepartmentCharges = completedDeptOrders.reduce((sum, ord) => sum + (ord.totalDepartmentCharge || ord.price || 0), 0);
-  const totalDoctorProcedureCharges = doctorProcedureCharges.reduce((sum, proc) => sum + (Number(proc.amount) || 0), 0);
-  const totalPharmacyCharges = pharmacyBilledPrescriptions.reduce((acc, rx) => {
-    if (rx.totalMedicineCharge) return acc + Number(rx.totalMedicineCharge);
-    const itemTotal = (rx.medicines || []).reduce(
-      (sum, m) => sum + (Number(m.price || m.unitPrice || 20) * Number(m.dispensedQty || m.durationDays || 1)),
-      0
-    );
-    return acc + itemTotal;
-  }, 0);
+  const totalDoctorProcedureCharges = useMemo(() => {
+    return doctorProcedureCharges.reduce((sum, proc) => sum + (Number(proc.amount) || 0), 0);
+  }, [doctorProcedureCharges]);
 
-  const grandTotal = Number(consultationFee || 0) + totalDoctorProcedureCharges + totalDepartmentCharges + totalPharmacyCharges;
+  const totalPharmacyCharges = useMemo(() => {
+    return pharmacyBilledPrescriptions.reduce((acc, rx) => {
+      if (rx.totalMedicineCharge) return acc + Number(rx.totalMedicineCharge);
+      const itemTotal = (rx.medicines || []).reduce(
+        (sum, m) => sum + (Number(m.price || m.unitPrice || 20) * Number(m.dispensedQty || m.durationDays || 1)),
+        0
+      );
+      return acc + itemTotal;
+    }, 0);
+  }, [pharmacyBilledPrescriptions]);
+
+  const grandTotal = useMemo(() => {
+    return Number(consultationFee || 0) + totalDoctorProcedureCharges + totalDepartmentCharges + totalPharmacyCharges;
+  }, [consultationFee, totalDoctorProcedureCharges, totalDepartmentCharges, totalPharmacyCharges]);
+
+  const inventoryMedByName = useMemo(() => {
+    const map = new Map();
+    inventoryMedicines.forEach((m) => {
+      if (m.name) map.set(m.name, m);
+    });
+    return map;
+  }, [inventoryMedicines]);
 
   const handleAddMedicineRow = () =>
     setPrescriptions((prev) => [
@@ -330,8 +362,8 @@ export const ConsultationModal = ({ isOpen, onClose, token, patient, onSuccess, 
       return u;
     });
 
-  const handleSelectInventoryMed = (index, selectedMedName) => {
-    const med = inventoryMedicines.find((m) => m.name === selectedMedName);
+  const handleSelectInventoryMed = useCallback((index, selectedMedName) => {
+    const med = inventoryMedByName.get(selectedMedName);
     if (med) {
       setPrescriptions((prev) => {
         const u = [...prev];
@@ -348,7 +380,7 @@ export const ConsultationModal = ({ isOpen, onClose, token, patient, onSuccess, 
         return u;
       });
     }
-  };
+  }, [inventoryMedByName, pharmacyMode]);
 
   const handleAddProcedureRow = () => setDoctorProcedureCharges((prev) => [...prev, { description: '', amount: '' }]);
   const handleRemoveProcedureRow = (index) => setDoctorProcedureCharges((prev) => prev.filter((_, idx) => idx !== index));
@@ -627,7 +659,7 @@ export const ConsultationModal = ({ isOpen, onClose, token, patient, onSuccess, 
                           <label className="block text-[11px] font-bold text-slate-600 mb-1">Medicine / Drug Name *</label>
                           <input
                             type="text"
-                            list={`med-list-${idx}`}
+                            list="consultation-inventory-med-list"
                             placeholder="e.g. Tab. Paracetamol 650mg or Amoxicillin"
                             value={med.medicineName}
                             onChange={(e) => {
@@ -636,13 +668,6 @@ export const ConsultationModal = ({ isOpen, onClose, token, patient, onSuccess, 
                             }}
                             className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
                           />
-                          <datalist id={`med-list-${idx}`}>
-                            {inventoryMedicines.map((m) => (
-                              <option key={m._id} value={m.name}>
-                                {m.name} ({m.genericName}) — Stock: {m.totalQuantity ?? 0} units
-                              </option>
-                            ))}
-                          </datalist>
                         </div>
 
                         <div className="sm:col-span-2">
@@ -772,6 +797,13 @@ export const ConsultationModal = ({ isOpen, onClose, token, patient, onSuccess, 
                   );
                 })}
               </div>
+              <datalist id="consultation-inventory-med-list">
+                {inventoryMedicines.map((m) => (
+                  <option key={m._id} value={m.name}>
+                    {m.name} ({m.genericName}) — Stock: {m.totalQuantity ?? 0} units
+                  </option>
+                ))}
+              </datalist>
             </div>
 
             {/* PHARMACY BILLED MEDICINES SUMMARY */}

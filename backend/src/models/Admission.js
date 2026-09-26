@@ -54,4 +54,9 @@ const admissionSchema = new mongoose.Schema(
 
 admissionSchema.plugin(encryptedFieldsPlugin, { fields: ['admissionReason'] });
 
+// High-speed compound indexes for inpatient admission census and patient admission history
+admissionSchema.index({ hospitalId: 1, status: 1 });
+admissionSchema.index({ hospitalId: 1, patientId: 1, createdAt: -1 });
+admissionSchema.index({ hospitalId: 1, createdAt: -1 });
+
 export const Admission = tenantAwareModel(mongoose.model('Admission', admissionSchema));

@@ -47,13 +47,26 @@ export class PharmacyService {
 
     const batches = await MedicineBatch.find(batchFilter).sort({ expiryDate: 1 }).lean();
 
+    // Index batches by medicineId for O(1) lookup
+    const batchesByMedId = new Map();
+    for (const b of batches) {
+      const key = String(b.medicineId);
+      let list = batchesByMedId.get(key);
+      if (!list) {
+        list = [];
+        batchesByMedId.set(key, list);
+      }
+      list.push(b);
+    }
+
+    // Redact purchase price if patient or guardian
+    const isPatientOrGuardian = ['PATIENT', 'GUARDIAN'].includes(user.role);
+
     return medicines.map((med) => {
-      const medBatches = batches.filter((b) => String(b.medicineId) === String(med._id));
+      const medBatches = batchesByMedId.get(String(med._id)) || [];
       const validBatches = medBatches.filter((b) => new Date(b.expiryDate) > now && b.quantity > 0);
       const totalAvailableQty = validBatches.reduce((sum, b) => sum + b.quantity, 0);
 
-      // Redact purchase price if patient or guardian
-      const isPatientOrGuardian = ['PATIENT', 'GUARDIAN'].includes(user.role);
       const baseMed = {
         ...med,
         totalQuantity: totalAvailableQty,

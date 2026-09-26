@@ -96,6 +96,9 @@ const normalize = (notification) => ({
   isCompleted: Boolean(notification.isCompleted),
 });
 
+let inFlightFetch = null;
+let inFlightView = null;
+
 /** Persisted task notifications and separate activity history */
 export const useNotificationStore = create((set, get) => ({
   notifications: [],
@@ -109,41 +112,51 @@ export const useNotificationStore = create((set, get) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
 
   fetchNotifications: async (view = 'active') => {
-    try {
-      const result = await axiosClient.get(`/notifications?view=${encodeURIComponent(view)}`);
-      const data = result?.data || result || {};
-      const user = useAuthStore.getState().user;
-      const userRole = user?.role;
-      const additionalRoles = user?.additionalRoles || [];
-      const allItems = (data.notifications || []).map(normalize);
-      const items = allItems.filter(
-        (n) => !isUnauthorizedForRole(n, userRole, additionalRoles)
-      );
-      const unread = items.filter((n) => !n.isRead && !n.isCompleted).length;
-
-      if (view === 'history') {
-        set({
-          historyNotifications: items,
-          historyCount: items.length,
-          unreadCount: unread,
-          isLoading: false,
-        });
-      } else {
-        set({
-          notifications: items,
-          activeCount: items.length,
-          historyCount: data.historyCount !== undefined ? data.historyCount : get().historyCount,
-          unreadCount: unread,
-          isLoading: false,
-        });
-      }
-    } catch (error) {
-      const isNetworkError = error?.code === 'ERR_NETWORK' || error?.message?.includes('Network Error') || !error?.response;
-      if (!isNetworkError) {
-        console.error('Failed to load notifications:', error);
-      }
-      set({ isLoading: false });
+    if (inFlightFetch && inFlightView === view) {
+      return inFlightFetch;
     }
+    inFlightView = view;
+    inFlightFetch = (async () => {
+      try {
+        const result = await axiosClient.get(`/notifications?view=${encodeURIComponent(view)}`);
+        const data = result?.data || result || {};
+        const user = useAuthStore.getState().user;
+        const userRole = user?.role;
+        const additionalRoles = user?.additionalRoles || [];
+        const allItems = (data.notifications || []).map(normalize);
+        const items = allItems.filter(
+          (n) => !isUnauthorizedForRole(n, userRole, additionalRoles)
+        );
+        const unread = items.filter((n) => !n.isRead && !n.isCompleted).length;
+
+        if (view === 'history') {
+          set({
+            historyNotifications: items,
+            historyCount: items.length,
+            unreadCount: unread,
+            isLoading: false,
+          });
+        } else {
+          set({
+            notifications: items,
+            activeCount: items.length,
+            historyCount: data.historyCount !== undefined ? data.historyCount : get().historyCount,
+            unreadCount: unread,
+            isLoading: false,
+          });
+        }
+      } catch (error) {
+        const isNetworkError = error?.code === 'ERR_NETWORK' || error?.message?.includes('Network Error') || !error?.response;
+        if (!isNetworkError) {
+          console.error('Failed to load notifications:', error);
+        }
+        set({ isLoading: false });
+      } finally {
+        inFlightFetch = null;
+        inFlightView = null;
+      }
+    })();
+    return inFlightFetch;
   },
 
   fetchHistory: async () => get().fetchNotifications('history'),

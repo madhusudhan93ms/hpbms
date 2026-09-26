@@ -381,7 +381,8 @@ export class DiagnosticsService {
       filter.status = query.status;
     }
 
-    return await DiagnosticOrder.find(filter).sort({ createdAt: -1 });
+    const limit = Math.min(Math.max(parseInt(query.limit, 10) || 200, 1), 500);
+    return await DiagnosticOrder.find(filter).sort({ createdAt: -1 }).limit(limit).lean({ getters: true });
   }
 
   static async updateDepartmentCharge(orderId, data, user) {
@@ -644,6 +645,6 @@ export class DiagnosticsService {
   }
 
   static async getPatientReports(patientId, user) {
-    return await DiagnosticOrder.find({ patientId }).sort({ createdAt: -1 });
+    return await DiagnosticOrder.find({ patientId }).sort({ createdAt: -1 }).lean({ getters: true });
   }
 }

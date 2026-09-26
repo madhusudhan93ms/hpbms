@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { StatCard } from '../../components/ui/StatCard';
 import { Card } from '../../components/ui/Card';
@@ -42,7 +42,13 @@ export const RadiologistDashboard = () => {
 
   useEffect(() => {
     if (!socket) return;
-    const handleRefresh = () => fetchOrders();
+    let refreshTimer = null;
+    const handleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        fetchOrders();
+      }, 250);
+    };
 
     socket.on('investigation:new_request', handleRefresh);
     socket.on('investigation:status_updated', handleRefresh);
@@ -50,6 +56,7 @@ export const RadiologistDashboard = () => {
     socket.on('workflow:pending_changed', handleRefresh);
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
       socket.off('investigation:new_request', handleRefresh);
       socket.off('investigation:status_updated', handleRefresh);
       socket.off('workflow:notification', handleRefresh);
@@ -133,20 +140,61 @@ export const RadiologistDashboard = () => {
     }
   };
 
-  const incomingOrders = orders.filter((o) => ['REQUESTED', 'DEPARTMENT_RECEIVED'].includes(o.status));
-  const progressOrders = orders.filter((o) => ['ACCEPTED', 'IN_PROGRESS'].includes(o.status));
-  const activeOrders = [...incomingOrders, ...progressOrders];
-  const completedOrders = orders.filter((o) => ['COMPLETED', 'REPORT_UPLOADED', 'REVIEWED'].includes(o.status));
+  const {
+    incomingOrders,
+    progressOrders,
+    activeOrders,
+    completedOrders,
+    pendingCount,
+    inProgressCount,
+    emergencyCount,
+  } = useMemo(() => {
+    const incoming = [];
+    const progress = [];
+    const completed = [];
+    let pCount = 0;
+    let ipCount = 0;
+    let emCount = 0;
 
-  const pendingCount = orders.filter((o) => o.status === 'REQUESTED').length;
-  const inProgressCount = orders.filter((o) => o.status === 'IN_PROGRESS' || o.status === 'ACCEPTED').length;
-  const emergencyCount = orders.filter((o) => o.priority === 'EMERGENCY').length;
+    orders.forEach((o) => {
+      if (o.status === 'REQUESTED' || o.status === 'DEPARTMENT_RECEIVED') {
+        incoming.push(o);
+      }
+      if (o.status === 'ACCEPTED' || o.status === 'IN_PROGRESS') {
+        progress.push(o);
+      }
+      if (o.status === 'COMPLETED' || o.status === 'REPORT_UPLOADED' || o.status === 'REVIEWED') {
+        completed.push(o);
+      }
+      if (o.status === 'REQUESTED') {
+        pCount++;
+      }
+      if (o.status === 'IN_PROGRESS' || o.status === 'ACCEPTED') {
+        ipCount++;
+      }
+      if (o.priority === 'EMERGENCY') {
+        emCount++;
+      }
+    });
 
-  const currentQueue = activeTab === 'COMPLETED'
-    ? completedOrders
-    : activeTab === 'PROGRESS'
-      ? progressOrders
-      : incomingOrders;
+    return {
+      incomingOrders: incoming,
+      progressOrders: progress,
+      activeOrders: [...incoming, ...progress],
+      completedOrders: completed,
+      pendingCount: pCount,
+      inProgressCount: ipCount,
+      emergencyCount: emCount,
+    };
+  }, [orders]);
+
+  const currentQueue = useMemo(() => {
+    return activeTab === 'COMPLETED'
+      ? completedOrders
+      : activeTab === 'PROGRESS'
+        ? progressOrders
+        : incomingOrders;
+  }, [activeTab, incomingOrders, progressOrders, completedOrders]);
 
   return (
     <div className="space-y-6 animate-fade-in">

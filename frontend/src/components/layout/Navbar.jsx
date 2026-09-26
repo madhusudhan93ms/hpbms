@@ -78,7 +78,13 @@ export const Navbar = ({ onToggleSidebar }) => {
     if (!user?.id && !user?._id) return;
     fetchNotifications();
     if (!socket) return;
-    const refresh = () => fetchNotifications();
+    let refreshDebounceTimer = null;
+    const refresh = () => {
+      if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
+      refreshDebounceTimer = setTimeout(() => {
+        fetchNotifications();
+      }, 250);
+    };
     socket.on('workflow:notification', refresh);
     socket.on('workflow:new_nurse_tasks', refresh);
     socket.on('nurse_task:created', refresh);
@@ -98,6 +104,7 @@ export const Navbar = ({ onToggleSidebar }) => {
     socket.on('patient_request:updated', refresh);
     socket.on('workflow:pending_changed', refresh);
     return () => {
+      if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
       socket.off('workflow:notification', refresh);
       socket.off('workflow:new_nurse_tasks', refresh);
       socket.off('nurse_task:created', refresh);

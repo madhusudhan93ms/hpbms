@@ -50,6 +50,7 @@ const patientSchema = new mongoose.Schema(
 
 patientSchema.index({ hospitalId: 1, uhid: 1 }, { unique: true });
 patientSchema.index({ hospitalId: 1, phone: 1 });
+patientSchema.index({ hospitalId: 1, createdAt: -1 });
 patientSchema.index({ hospitalId: 1, isActive: 1, createdAt: -1 });
 patientSchema.index({ hospitalId: 1, admissionStatus: 1 });
 
