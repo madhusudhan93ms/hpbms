@@ -43,6 +43,7 @@ export const ReceptionWorkspaceView = () => {
   const [doctorQueueCounts, setDoctorQueueCounts] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Search in registered directory
   const [searchTerm, setSearchTerm] = useState('');
@@ -153,7 +154,7 @@ export const ReceptionWorkspaceView = () => {
     if (!socket) return;
 
     const handlePatientRegistered = (payload) => {
-      if (payload && payload.patientId) {
+      if (payload && (payload.patientId || payload.uhid)) {
         const card = {
           _id: payload.patientId,
           uhid: payload.uhid,
@@ -164,8 +165,20 @@ export const ReceptionWorkspaceView = () => {
           createdAt: payload.timestamp || new Date().toISOString(),
         };
         setPatients((prev) => {
-          const exists = prev.some((p) => String(p._id) === String(payload.patientId));
-          return exists ? prev : [card, ...prev];
+          const exists = prev.some(
+            (p) =>
+              (payload.patientId && String(p._id) === String(payload.patientId)) ||
+              (payload.uhid && p.uhid === payload.uhid)
+          );
+          if (exists) {
+            return prev.map((p) =>
+              (payload.patientId && String(p._id) === String(payload.patientId)) ||
+              (payload.uhid && p.uhid === payload.uhid)
+                ? { ...p, ...card }
+                : p
+            );
+          }
+          return [card, ...prev];
         });
       } else {
         clearTimeout(queueDebounceRef.current);
@@ -184,7 +197,6 @@ export const ReceptionWorkspaceView = () => {
     };
 
     socket.on('patient:registered', handlePatientRegistered);
-    socket.on('patient:created', handlePatientRegistered);
     socket.on('opd_queue:updated', handleQueueUpdate);
     socket.on('opd_queue:status_changed', handleQueueUpdate);
     socket.on('token:generated', handleQueueUpdate);
@@ -194,7 +206,6 @@ export const ReceptionWorkspaceView = () => {
 
     return () => {
       socket.off('patient:registered', handlePatientRegistered);
-      socket.off('patient:created', handlePatientRegistered);
       socket.off('opd_queue:updated', handleQueueUpdate);
       socket.off('opd_queue:status_changed', handleQueueUpdate);
       socket.off('token:generated', handleQueueUpdate);
@@ -217,24 +228,40 @@ export const ReceptionWorkspaceView = () => {
   const debouncedSearchTerm = useDebounce(searchTerm, 200);
   const lowerSearch = debouncedSearchTerm.toLowerCase();
 
+  // Deduplicate directory patient list by _id and uhid
+  const uniquePatients = React.useMemo(() => {
+    const seenIds = new Set();
+    const seenUhids = new Set();
+    const result = [];
+    for (const p of patients) {
+      const idKey = p._id ? String(p._id) : null;
+      const uhidKey = p.uhid ? String(p.uhid).toUpperCase() : null;
+      if (idKey && seenIds.has(idKey)) continue;
+      if (uhidKey && seenUhids.has(uhidKey)) continue;
+      if (idKey) seenIds.add(idKey);
+      if (uhidKey) seenUhids.add(uhidKey);
+      result.push(p);
+    }
+    return result;
+  }, [patients]);
 
   // Memoized Filtered Registered Directory
   const filteredAllPatients = React.useMemo(() => {
-    if (!lowerSearch) return patients;
-    return patients.filter(
+    if (!lowerSearch) return uniquePatients;
+    return uniquePatients.filter(
       (p) =>
         p.firstName?.toLowerCase().includes(lowerSearch) ||
         p.lastName?.toLowerCase().includes(lowerSearch) ||
         p.uhid?.toLowerCase().includes(lowerSearch) ||
         p.phone?.toLowerCase().includes(lowerSearch)
     );
-  }, [patients, lowerSearch]);
+  }, [uniquePatients, lowerSearch]);
 
   // Memoized returning patients search
   const returningSearchResults = React.useMemo(() => {
     const term = returningSearch.trim().toLowerCase();
     if (!term) return [];
-    return patients
+    return uniquePatients
       .filter(
         (p) =>
           p.phone?.includes(term) ||
@@ -242,7 +269,7 @@ export const ReceptionWorkspaceView = () => {
           `${p.firstName} ${p.lastName}`.toLowerCase().includes(term)
       )
       .slice(0, 6);
-  }, [patients, returningSearch]);
+  }, [uniquePatients, returningSearch]);
 
   // DOB & Age synchronization helper
   const handleDobChange = (e) => {
@@ -288,6 +315,7 @@ export const ReceptionWorkspaceView = () => {
   // Submit Handler: Register New Walk-in + Issue Token in ONE Click
   const handleRegisterAndIssueToken = async (e, issueToken = true) => {
     if (e) e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
     if (!newPatient.firstName.trim()) {
       setFormError('Patient First Name is required.');
       return;
@@ -298,6 +326,7 @@ export const ReceptionWorkspaceView = () => {
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setFormError(null);
     setDuplicateMatch(null);
@@ -326,8 +355,23 @@ export const ReceptionWorkspaceView = () => {
       const patRes = await axiosClient.post('/patients', patPayload);
       const createdPatient = patRes.data;
 
-      // Update local patient roster immediately
-      setPatients((prev) => [createdPatient, ...prev]);
+      // Update local patient roster immediately with deduplication
+      setPatients((prev) => {
+        const exists = prev.some(
+          (p) =>
+            (createdPatient._id && String(p._id) === String(createdPatient._id)) ||
+            (createdPatient.uhid && p.uhid === createdPatient.uhid)
+        );
+        if (exists) {
+          return prev.map((p) =>
+            (createdPatient._id && String(p._id) === String(createdPatient._id)) ||
+            (createdPatient.uhid && p.uhid === createdPatient.uhid)
+              ? { ...p, ...createdPatient }
+              : p
+          );
+        }
+        return [createdPatient, ...prev];
+      });
 
       if (issueToken) {
         // 2. Issue OPD Queue Token
@@ -367,12 +411,14 @@ export const ReceptionWorkspaceView = () => {
       }
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 
   // Submit Handler: Issue Token for Returning Patient
   const handleIssueTokenForReturning = async (e) => {
     if (e) e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
     if (!selectedReturningPatient) {
       setFormError('Please select a returning patient first.');
       return;
@@ -382,6 +428,7 @@ export const ReceptionWorkspaceView = () => {
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setFormError(null);
     setFormSuccess(null);
@@ -411,6 +458,7 @@ export const ReceptionWorkspaceView = () => {
       setFormError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to issue token.');
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -1065,7 +1113,7 @@ export const ReceptionWorkspaceView = () => {
                 Registered Patients Directory
               </h2>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                {patients.length} Total Patients
+                {uniquePatients.length} Total Patients
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -34,6 +34,7 @@ export const PatientRegistrationPage = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { isDualModeEligible } = useWorkspaceModeStore();
+  const isSubmittingRef = useRef(false);
   const [historyPatientId, setHistoryPatientId] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,10 +90,12 @@ export const PatientRegistrationPage = () => {
 
   const handleInlineSubmit = async (e, issueToken = false, force = false) => {
     if (e) e.preventDefault();
+    if (isSubmittingRef.current || isLoading) return;
     if (!formData.firstName.trim()) {
       setError('Patient first name is required.');
       return;
     }
+    isSubmittingRef.current = true;
     setIsLoading(true);
     setError(null);
     setDuplicates([]);
@@ -111,8 +114,13 @@ export const PatientRegistrationPage = () => {
         guardianName: '', guardianPhone: '', guardianRelationship: 'FATHER',
       });
 
-      // Prepend to local list — no extra API round-trip needed
-      setRecentPatients((prev) => [newPat, ...prev].slice(0, 50));
+      // Prepend to local list with deduplication
+      setRecentPatients((prev) => {
+        const filtered = prev.filter(
+          (p) => String(p._id) !== String(newPat._id) && (!p.uhid || p.uhid !== newPat.uhid)
+        );
+        return [newPat, ...filtered].slice(0, 50);
+      });
 
       if (issueToken) {
         setSelectedPatientForToken(newPat);
@@ -136,13 +144,26 @@ export const PatientRegistrationPage = () => {
       }
     } finally {
       setIsLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   const filteredPatients = useMemo(() => {
+    const seenIds = new Set();
+    const seenUhids = new Set();
+    const unique = [];
+    for (const p of recentPatients) {
+      const idKey = p._id ? String(p._id) : null;
+      const uhidKey = p.uhid ? String(p.uhid).toUpperCase() : null;
+      if (idKey && seenIds.has(idKey)) continue;
+      if (uhidKey && seenUhids.has(uhidKey)) continue;
+      if (idKey) seenIds.add(idKey);
+      if (uhidKey) seenUhids.add(uhidKey);
+      unique.push(p);
+    }
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return recentPatients;
-    return recentPatients.filter(
+    if (!q) return unique;
+    return unique.filter(
       (p) =>
         p.firstName?.toLowerCase().includes(q) ||
         p.lastName?.toLowerCase().includes(q) ||

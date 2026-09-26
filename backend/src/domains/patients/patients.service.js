@@ -218,6 +218,30 @@ export class PatientsService {
       }
     }
 
+    // --- 2b. RAPID CONCURRENT DOUBLE-SUBMIT GUARD ---
+    // If an identical registration (same hospital, same first & last name, same phone) was created within the last 15 seconds,
+    // return the existing patient to make registration idempotent and prevent double entries.
+    if (firstName) {
+      const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
+      const recentDuplicate = await Patient.findOne({
+        hospitalId,
+        firstName: { $regex: `^${firstName.trim()}$`, $options: 'i' },
+        ...(lastName ? { lastName: { $regex: `^${lastName.trim()}$`, $options: 'i' } } : {}),
+        ...(patientPhone ? { phone: patientPhone } : {}),
+        createdAt: { $gte: fifteenSecondsAgo },
+      });
+
+      if (recentDuplicate) {
+        const responseData = recentDuplicate.toObject();
+        responseData.patientCredentials = {
+          username: patientPhone || recentDuplicate.uhid,
+          password: patientPhone || recentDuplicate.uhid,
+          loginUrl: '/login',
+        };
+        return responseData;
+      }
+    }
+
     // Generate unique, collision-free UHID auto-sequence (e.g. HOSP-2026-00001)
     // Scoped to hospitalId + current year for accurate sequence numbering
     const year = new Date().getFullYear();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { axiosClient } from '../../api/axiosClient';
@@ -7,6 +7,7 @@ import { X, UserPlus, CheckCircle, AlertCircle, Phone, MapPin, Users, UserCheck,
 
 export const RegisterPatientModal = ({ isOpen, onClose, onSuccess, onIssueToken }) => {
   useScrollLock(isOpen);
+  const isSubmittingRef = useRef(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -35,10 +36,12 @@ export const RegisterPatientModal = ({ isOpen, onClose, onSuccess, onIssueToken 
 
   const handleSubmit = async (e, issueToken = false, force = false) => {
     if (e) e.preventDefault();
+    if (isSubmittingRef.current || isLoading) return;
     if (!formData.firstName.trim()) {
       setError('Patient first name is required.');
       return;
     }
+    isSubmittingRef.current = true;
     setIsLoading(true);
     setError(null);
     setDuplicates([]);
@@ -71,6 +74,7 @@ export const RegisterPatientModal = ({ isOpen, onClose, onSuccess, onIssueToken 
       }
     } finally {
       setIsLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
