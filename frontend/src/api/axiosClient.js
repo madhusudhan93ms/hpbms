@@ -175,25 +175,10 @@ axiosClient.interceptors.response.use(
   }
 );
 
-// Rule 15: In-Memory API Cache to eliminate repeated loading across component navigations
-const apiCache = new Map();
-const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes cache for GET requests
-
-export const invalidateApiCache = (pattern) => {
-  if (!pattern) {
-    apiCache.clear();
-    return;
-  }
-  for (const key of apiCache.keys()) {
-    if (typeof pattern === 'string' && key.includes(pattern)) {
-      apiCache.delete(key);
-    } else if (pattern instanceof RegExp && pattern.test(key)) {
-      apiCache.delete(key);
-    }
-  }
-};
-
-export const clearApiCache = () => apiCache.clear();
+// Direct database-first data fetching: No in-memory caching of API responses.
+// Ensures data is always fresh from the database and not held in local memory variables/objects.
+export const invalidateApiCache = () => {};
+export const clearApiCache = () => {};
 
 // Rule 13: Cancel Unnecessary Requests (AbortController helper for search / typeahead)
 export const createAbortController = () => {
@@ -203,37 +188,3 @@ export const createAbortController = () => {
     abort: (reason) => controller.abort(reason),
   };
 };
-
-const originalGet = axiosClient.get.bind(axiosClient);
-axiosClient.get = async function (url, config = {}) {
-  // Never cache blobs, downloads, or when skipCache is requested
-  if (
-    config?.skipCache ||
-    config?.responseType === 'blob' ||
-    config?.headers?.['Cache-Control'] === 'no-cache'
-  ) {
-    return originalGet(url, config);
-  }
-
-  const contextHeader = localStorage.getItem('hpmbs_super_admin_context') || '';
-  const cacheKey = `GET:${url}:${JSON.stringify(config?.params || {})}:${contextHeader}`;
-  const cached = apiCache.get(cacheKey);
-
-  const now = Date.now();
-  if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
-    return cached.data;
-  }
-
-  const res = await originalGet(url, config);
-  apiCache.set(cacheKey, { data: res, timestamp: Date.now() });
-  return res;
-};
-
-// Auto-invalidate cache on mutations (POST, PUT, PATCH, DELETE) so subsequent GETs fetch fresh data
-['post', 'put', 'patch', 'delete'].forEach((method) => {
-  const originalMethod = axiosClient[method].bind(axiosClient);
-  axiosClient[method] = async function (url, ...args) {
-    invalidateApiCache();
-    return originalMethod(url, ...args);
-  };
-});

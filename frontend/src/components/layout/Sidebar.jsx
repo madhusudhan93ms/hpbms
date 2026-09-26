@@ -504,34 +504,14 @@ export const Sidebar = ({ isOpen, onClose }) => {
     return groups;
   }, [menuItems, isDual, currentMode]);
 
+  // Sub-navigations / categories are closed by default
   const [openCategories, setOpenCategories] = useState({});
 
-  // Auto-expand category containing the active route
-  useEffect(() => {
-    const activeCategory = groupedCategories.find((group) =>
-      group.items.some((item) => isItemActive(item.path))
-    );
-    if (activeCategory) {
-      setOpenCategories((prev) => {
-        if (prev[activeCategory.category]) {
-          return prev;
-        }
-        return {
-          ...prev,
-          [activeCategory.category]: true,
-        };
-      });
-    }
-  }, [location.pathname, location.search, groupedCategories]);
-
   const toggleCategory = (catName) => {
-    setOpenCategories((prev) => {
-      const currentVal = prev[catName] !== undefined ? prev[catName] : true;
-      return {
-        ...prev,
-        [catName]: !currentVal,
-      };
-    });
+    setOpenCategories((prev) => ({
+      ...prev,
+      [catName]: !prev[catName],
+    }));
   };
 
   // Memoized unread counts map for all navigation items to avoid re-evaluating getUnreadCountForNav 3x per item
@@ -677,7 +657,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
           aria-label="Sidebar navigation"
         >
           {groupedCategories.map((group) => {
-            const isCategoryOpen = openCategories[group.category] !== false; // open by default
+            const isCategoryOpen = Boolean(openCategories[group.category]); // closed by default
             const CatIcon = Icons[CATEGORY_ICONS[group.category]] || Icons.FolderClosed;
             const isCatActive = group.items.some((it) => isItemActive(it.path));
 
