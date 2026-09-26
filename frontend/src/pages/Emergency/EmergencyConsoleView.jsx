@@ -192,17 +192,17 @@ export const EmergencyConsoleView = () => {
             <span className="text-xs text-slate-500 font-medium">Historical audit trail</span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[500px] rounded-xl border border-slate-200">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px]">
+              <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-slate-200 text-slate-700 font-bold uppercase text-[11px] shadow-2xs">
                 <tr>
-                  <th className="p-3">Protocol</th>
-                  <th className="p-3">Location</th>
-                  <th className="p-3">Patient</th>
-                  <th className="p-3">Initiated By</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Resolved By</th>
-                  <th className="p-3">Time</th>
+                  <th className="p-3 bg-slate-100">Protocol</th>
+                  <th className="p-3 bg-slate-100">Location</th>
+                  <th className="p-3 bg-slate-100">Patient</th>
+                  <th className="p-3 bg-slate-100">Initiated By</th>
+                  <th className="p-3 bg-slate-100">Status</th>
+                  <th className="p-3 bg-slate-100">Resolved By</th>
+                  <th className="p-3 bg-slate-100">Time</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">

@@ -822,7 +822,7 @@ export const ReceptionWorkspaceView = () => {
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. Ramesh"
+                        placeholder="Your Name"
                         value={newPatient.firstName}
                         onChange={(e) => setNewPatient({ ...newPatient, firstName: e.target.value })}
                         required
@@ -837,7 +837,7 @@ export const ReceptionWorkspaceView = () => {
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. Kumar"
+                        placeholder="Last Name"
                         value={newPatient.lastName}
                         onChange={(e) => setNewPatient({ ...newPatient, lastName: e.target.value })}
                         className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
@@ -887,7 +887,7 @@ export const ReceptionWorkspaceView = () => {
                         type="number"
                         min="0"
                         max="125"
-                        placeholder="e.g. 32"
+                        placeholder="Age"
                         value={newPatient.age}
                         onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
                         className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
@@ -972,7 +972,7 @@ export const ReceptionWorkspaceView = () => {
                             </label>
                             <input
                               type="text"
-                              placeholder="e.g. Suresh Kumar"
+                              placeholder="Guardian Name"
                               value={newPatient.guardianName}
                               onChange={(e) => setNewPatient({ ...newPatient, guardianName: e.target.value })}
                               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
@@ -1209,16 +1209,16 @@ export const ReceptionWorkspaceView = () => {
         </div>
 
         {/* Directory Table */}
-        <div className="overflow-x-auto mt-4">
+        <div className="overflow-x-auto overflow-y-auto max-h-[540px] rounded-xl border border-slate-200/90 mt-4 relative shadow-2xs">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600 uppercase tracking-wider text-[10px] border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-700 uppercase tracking-wider text-[10px] border-b border-slate-200 shadow-2xs">
               <tr>
-                <th className="p-3 font-extrabold">UHID</th>
-                <th className="p-3 font-extrabold">Patient Name</th>
-                <th className="p-3 font-extrabold">Age / Gender</th>
-                <th className="p-3 font-extrabold">Mobile Phone</th>
-                <th className="p-3 font-extrabold">Registered Date</th>
-                <th className="p-3 font-extrabold text-right">Actions</th>
+                <th className="p-3 font-extrabold bg-slate-100">UHID</th>
+                <th className="p-3 font-extrabold bg-slate-100">Patient Name</th>
+                <th className="p-3 font-extrabold bg-slate-100">Age / Gender</th>
+                <th className="p-3 font-extrabold bg-slate-100">Mobile Phone</th>
+                <th className="p-3 font-extrabold bg-slate-100">Registered Date</th>
+                <th className="p-3 font-extrabold bg-slate-100 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-800">

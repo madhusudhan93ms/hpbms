@@ -834,16 +834,16 @@ export const PharmacistDashboard = () => {
                 </div>
 
                 {inventoryFilteredMedicines.length > 0 ? (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
+                      <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 shadow-2xs">
                         <tr>
-                          <th className="p-3">Medicine SKU</th>
-                          <th className="p-3">Current vs Safety Buffer</th>
-                          <th className="p-3">Depletion Risk</th>
-                          <th className="p-3">Estimated Runout</th>
-                          <th className="p-3">Suggested Reorder</th>
-                          <th className="p-3 text-right">Actions</th>
+                          <th className="p-3 bg-slate-100">Medicine SKU</th>
+                          <th className="p-3 bg-slate-100">Current vs Safety Buffer</th>
+                          <th className="p-3 bg-slate-100">Depletion Risk</th>
+                          <th className="p-3 bg-slate-100">Estimated Runout</th>
+                          <th className="p-3 bg-slate-100">Suggested Reorder</th>
+                          <th className="p-3 bg-slate-100 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -961,18 +961,18 @@ export const PharmacistDashboard = () => {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider">
+                  <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 shadow-2xs">
                     <tr>
-                      <th className="p-3">Medicine Name</th>
-                      <th className="p-3">Generic Name</th>
-                      <th className="p-3">Category</th>
-                      <th className="p-3">Form & Strength</th>
-                      <th className="p-3">Sell Price</th>
-                      <th className="p-3">Available Stock</th>
-                      <th className="p-3">Status</th>
-                      <th className="p-3 text-right">Actions</th>
+                      <th className="p-3 bg-slate-100">Medicine Name</th>
+                      <th className="p-3 bg-slate-100">Generic Name</th>
+                      <th className="p-3 bg-slate-100">Category</th>
+                      <th className="p-3 bg-slate-100">Form &amp; Strength</th>
+                      <th className="p-3 bg-slate-100">Sell Price</th>
+                      <th className="p-3 bg-slate-100">Available Stock</th>
+                      <th className="p-3 bg-slate-100">Status</th>
+                      <th className="p-3 bg-slate-100 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1111,18 +1111,18 @@ export const PharmacistDashboard = () => {
           <h3 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
             <FileText size={18} className="text-indigo-600" /> Complete Inventory Stock Audit Trail
           </h3>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider">
+              <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 shadow-2xs">
                 <tr>
-                  <th className="p-3">Timestamp</th>
-                  <th className="p-3">Medicine</th>
-                  <th className="p-3">Batch No</th>
-                  <th className="p-3">Type</th>
-                  <th className="p-3">Location</th>
-                  <th className="p-3">Qty Change</th>
-                  <th className="p-3">Reason</th>
-                  <th className="p-3">Performed By</th>
+                  <th className="p-3 bg-slate-100">Timestamp</th>
+                  <th className="p-3 bg-slate-100">Medicine</th>
+                  <th className="p-3 bg-slate-100">Batch No</th>
+                  <th className="p-3 bg-slate-100">Type</th>
+                  <th className="p-3 bg-slate-100">Location</th>
+                  <th className="p-3 bg-slate-100">Qty Change</th>
+                  <th className="p-3 bg-slate-100">Reason</th>
+                  <th className="p-3 bg-slate-100">Performed By</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

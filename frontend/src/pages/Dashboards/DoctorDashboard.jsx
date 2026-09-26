@@ -1855,16 +1855,16 @@ export const DoctorDashboard = () => {
             </h3>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold">
+              <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold shadow-2xs">
                 <tr>
-                  <th className="p-3">Token #</th>
-                  <th className="p-3">UHID</th>
-                  <th className="p-3">Patient Name</th>
-                  <th className="p-3">Chief Complaint</th>
-                  <th className="p-3">Finalized Time</th>
-                  <th className="p-3 text-right">Actions</th>
+                  <th className="p-3 bg-slate-100">Token #</th>
+                  <th className="p-3 bg-slate-100">UHID</th>
+                  <th className="p-3 bg-slate-100">Patient Name</th>
+                  <th className="p-3 bg-slate-100">Chief Complaint</th>
+                  <th className="p-3 bg-slate-100">Finalized Time</th>
+                  <th className="p-3 bg-slate-100 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-black">
@@ -1988,19 +1988,19 @@ export const DoctorDashboard = () => {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold shadow-2xs">
                       <tr>
-                        <th className="p-3">Patient Name</th>
-                        <th className="p-3">UHID</th>
-                        <th className="p-3">Medicine &amp; Dose</th>
-                        <th className="p-3">Route / Site</th>
-                        <th className="p-3">Administering Nurse</th>
-                        <th className="p-3">Administered Time</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3">Reaction / Notes</th>
-                        <th className="p-3 text-right">Action</th>
+                        <th className="p-3 bg-slate-100">Patient Name</th>
+                        <th className="p-3 bg-slate-100">UHID</th>
+                        <th className="p-3 bg-slate-100">Medicine &amp; Dose</th>
+                        <th className="p-3 bg-slate-100">Route / Site</th>
+                        <th className="p-3 bg-slate-100">Administering Nurse</th>
+                        <th className="p-3 bg-slate-100">Administered Time</th>
+                        <th className="p-3 bg-slate-100">Status</th>
+                        <th className="p-3 bg-slate-100">Reaction / Notes</th>
+                        <th className="p-3 bg-slate-100 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-black">
@@ -2115,18 +2115,18 @@ export const DoctorDashboard = () => {
                       Past administered injections and treatments from completed consultations.
                     </p>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100 text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold">
+                      <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold shadow-2xs">
                         <tr>
-                          <th className="p-3">Patient Name</th>
-                          <th className="p-3">UHID</th>
-                          <th className="p-3">Medicine &amp; Dose</th>
-                          <th className="p-3">Route / Site</th>
-                          <th className="p-3">Administering Nurse</th>
-                          <th className="p-3">Administered Time</th>
-                          <th className="p-3">Status</th>
-                          <th className="p-3">Reaction / Notes</th>
+                          <th className="p-3 bg-slate-100">Patient Name</th>
+                          <th className="p-3 bg-slate-100">UHID</th>
+                          <th className="p-3 bg-slate-100">Medicine &amp; Dose</th>
+                          <th className="p-3 bg-slate-100">Route / Site</th>
+                          <th className="p-3 bg-slate-100">Administering Nurse</th>
+                          <th className="p-3 bg-slate-100">Administered Time</th>
+                          <th className="p-3 bg-slate-100">Status</th>
+                          <th className="p-3 bg-slate-100">Reaction / Notes</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 text-black">
@@ -2187,18 +2187,18 @@ export const DoctorDashboard = () => {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold shadow-2xs">
                       <tr>
-                        <th className="p-3">Patient Name</th>
-                        <th className="p-3">Token / Patient ID</th>
-                        <th className="p-3">Department</th>
-                        <th className="p-3">Requested Service</th>
-                        <th className="p-3">Sent Time</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3">Response Time</th>
-                        <th className="p-3 text-right">Action</th>
+                        <th className="p-3 bg-slate-100">Patient Name</th>
+                        <th className="p-3 bg-slate-100">Token / Patient ID</th>
+                        <th className="p-3 bg-slate-100">Department</th>
+                        <th className="p-3 bg-slate-100">Requested Service</th>
+                        <th className="p-3 bg-slate-100">Sent Time</th>
+                        <th className="p-3 bg-slate-100">Status</th>
+                        <th className="p-3 bg-slate-100">Response Time</th>
+                        <th className="p-3 bg-slate-100 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-black">
@@ -2296,16 +2296,16 @@ export const DoctorDashboard = () => {
                       Completed investigation reports reviewed by the doctor.
                     </p>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100 text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold">
+                      <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold shadow-2xs">
                         <tr>
-                          <th className="p-3">Patient Name</th>
-                          <th className="p-3">Token / UHID</th>
-                          <th className="p-3">Department</th>
-                          <th className="p-3">Requested Service</th>
-                          <th className="p-3">Status</th>
-                          <th className="p-3">Reviewed Time</th>
+                          <th className="p-3 bg-slate-100">Patient Name</th>
+                          <th className="p-3 bg-slate-100">Token / UHID</th>
+                          <th className="p-3 bg-slate-100">Department</th>
+                          <th className="p-3 bg-slate-100">Requested Service</th>
+                          <th className="p-3 bg-slate-100">Status</th>
+                          <th className="p-3 bg-slate-100">Reviewed Time</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 text-black">
@@ -2448,16 +2448,16 @@ export const DoctorDashboard = () => {
                   )}
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-amber-200">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-amber-100/60 text-slate-900 uppercase tracking-wider text-[10px] border-b border-amber-200 font-bold">
+                    <thead className="sticky top-0 z-10 bg-amber-100/95 backdrop-blur-xs text-slate-900 uppercase tracking-wider text-[10px] border-b border-amber-200 font-bold shadow-2xs">
                       <tr>
-                        <th className="p-3">Patient Name &amp; UHID</th>
-                        <th className="p-3">Cashier Query / Doubt</th>
-                        <th className="p-3">Returned By</th>
-                        <th className="p-3">Prescribed Medicines / Items</th>
-                        <th className="p-3">Returned Time</th>
-                        <th className="p-3 text-right">Action</th>
+                        <th className="p-3 bg-amber-100">Patient Name &amp; UHID</th>
+                        <th className="p-3 bg-amber-100">Cashier Query / Doubt</th>
+                        <th className="p-3 bg-amber-100">Returned By</th>
+                        <th className="p-3 bg-amber-100">Prescribed Medicines / Items</th>
+                        <th className="p-3 bg-amber-100">Returned Time</th>
+                        <th className="p-3 bg-amber-100 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-amber-100 text-black">
@@ -2552,15 +2552,15 @@ export const DoctorDashboard = () => {
                       Resolved Billing Queries History ({filteredHistoryReturnedBilling.length})
                     </h3>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100 text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold">
+                      <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-900 uppercase tracking-wider text-[10px] border-b border-slate-200 font-bold shadow-2xs">
                         <tr>
-                          <th className="p-3">Patient Name</th>
-                          <th className="p-3">UHID</th>
-                          <th className="p-3">Cashier Query</th>
-                          <th className="p-3">Status</th>
-                          <th className="p-3">Resolved Time</th>
+                          <th className="p-3 bg-slate-100">Patient Name</th>
+                          <th className="p-3 bg-slate-100">UHID</th>
+                          <th className="p-3 bg-slate-100">Cashier Query</th>
+                          <th className="p-3 bg-slate-100">Status</th>
+                          <th className="p-3 bg-slate-100">Resolved Time</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 text-black">

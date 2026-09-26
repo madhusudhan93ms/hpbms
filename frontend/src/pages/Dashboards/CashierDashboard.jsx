@@ -693,16 +693,16 @@ export const CashierDashboard = () => {
 
           {/* ACTIVE RECEIPTS VIEW */}
           {receiptSubTab === 'ACTIVE' && (
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="border border-slate-200 rounded-xl overflow-x-auto overflow-y-auto max-h-[540px]">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] border-b border-slate-200">
+                <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-700 uppercase text-[10px] border-b border-slate-200 shadow-2xs font-bold">
                   <tr>
-                    <th className="p-3">Receipt No</th>
-                    <th className="p-3">Patient Details</th>
-                    <th className="p-3 text-center">Tender Mode</th>
-                    <th className="p-3 text-right">Amount Paid</th>
-                    <th className="p-3 text-center">Date & Time</th>
-                    <th className="p-3 text-right">Actions</th>
+                    <th className="p-3 bg-slate-100">Receipt No</th>
+                    <th className="p-3 bg-slate-100">Patient Details</th>
+                    <th className="p-3 bg-slate-100 text-center">Tender Mode</th>
+                    <th className="p-3 bg-slate-100 text-right">Amount Paid</th>
+                    <th className="p-3 bg-slate-100 text-center">Date & Time</th>
+                    <th className="p-3 bg-slate-100 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-slate-800">
@@ -802,18 +802,18 @@ export const CashierDashboard = () => {
                 </div>
               </div>
 
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto overflow-y-auto max-h-[540px]">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-rose-50/70 text-rose-800 uppercase text-[10px] border-b border-rose-200">
+                  <thead className="sticky top-0 z-10 bg-rose-50/95 backdrop-blur-xs text-rose-800 uppercase text-[10px] border-b border-rose-200 shadow-2xs font-bold">
                     <tr>
-                      <th className="p-3">Receipt / Invoice</th>
-                      <th className="p-3">Patient Details</th>
-                      <th className="p-3 text-right">Voided Amount</th>
-                      <th className="p-3">Billed By</th>
-                      <th className="p-3">Deleted By</th>
-                      <th className="p-3">Deletion Reason</th>
-                      <th className="p-3 text-center">Date Deleted</th>
-                      <th className="p-3 text-right">Actions</th>
+                      <th className="p-3 bg-rose-50">Receipt / Invoice</th>
+                      <th className="p-3 bg-rose-50">Patient Details</th>
+                      <th className="p-3 bg-rose-50 text-right">Voided Amount</th>
+                      <th className="p-3 bg-rose-50">Billed By</th>
+                      <th className="p-3 bg-rose-50">Deleted By</th>
+                      <th className="p-3 bg-rose-50">Deletion Reason</th>
+                      <th className="p-3 bg-rose-50 text-center">Date Deleted</th>
+                      <th className="p-3 bg-rose-50 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-slate-800">

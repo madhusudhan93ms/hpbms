@@ -839,17 +839,17 @@ export const SuperAdminHospitalDashboard = () => {
                   {tableHeader.title}
                 </h3>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 shadow-2xs">
                       <tr>
-                        <th className="p-3">{roleFilter === 'DOCTOR' ? 'DOCTOR NAME' : 'STAFF NAME'}</th>
-                        <th className="p-3">ROLE / SPECIALIZATION</th>
-                        <th className="p-3">LOGIN EMAIL</th>
-                        <th className="p-3">PASSWORD MANAGEMENT</th>
-                        <th className="p-3">OPD CABIN / WARD</th>
-                        <th className="p-3">DUTY STATUS</th>
-                        <th className="p-3 text-right">SUPER ADMIN ACTION</th>
+                        <th className="p-3 bg-slate-100">{roleFilter === 'DOCTOR' ? 'DOCTOR NAME' : 'STAFF NAME'}</th>
+                        <th className="p-3 bg-slate-100">ROLE / SPECIALIZATION</th>
+                        <th className="p-3 bg-slate-100">LOGIN EMAIL</th>
+                        <th className="p-3 bg-slate-100">PASSWORD MANAGEMENT</th>
+                        <th className="p-3 bg-slate-100">OPD CABIN / WARD</th>
+                        <th className="p-3 bg-slate-100">DUTY STATUS</th>
+                        <th className="p-3 bg-slate-100 text-right">SUPER ADMIN ACTION</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -923,16 +923,16 @@ export const SuperAdminHospitalDashboard = () => {
                     Download Customers (Excel / CSV)
                   </Button>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
+                  <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 shadow-2xs">
                     <tr>
-                      <th className="p-3">Patient Name</th>
-                      <th className="p-3">UHID</th>
-                      <th className="p-3">Contact Phone</th>
-                      <th className="p-3">Category</th>
-                      <th className="p-3">Gender & Age</th>
-                      <th className="p-3">Registration Date</th>
+                      <th className="p-3 bg-slate-100">Patient Name</th>
+                      <th className="p-3 bg-slate-100">UHID</th>
+                      <th className="p-3 bg-slate-100">Contact Phone</th>
+                      <th className="p-3 bg-slate-100">Category</th>
+                      <th className="p-3 bg-slate-100">Gender &amp; Age</th>
+                      <th className="p-3 bg-slate-100">Registration Date</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -975,15 +975,16 @@ export const SuperAdminHospitalDashboard = () => {
                 </div>
 
                 <h4 className="font-bold text-slate-900 pt-2">Staff Revenue Breakdown</h4>
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="p-3">Staff Name</th>
-                      <th className="p-3">Role</th>
-                      <th className="p-3">Patients Handled</th>
-                      <th className="p-3">Total Revenue Generated</th>
-                    </tr>
-                  </thead>
+                <div className="overflow-x-auto overflow-y-auto max-h-[480px] rounded-xl border border-slate-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 shadow-2xs">
+                      <tr>
+                        <th className="p-3 bg-slate-100">Staff Name</th>
+                        <th className="p-3 bg-slate-100">Role</th>
+                        <th className="p-3 bg-slate-100">Patients Handled</th>
+                        <th className="p-3 bg-slate-100">Total Revenue Generated</th>
+                      </tr>
+                    </thead>
                   <tbody className="divide-y divide-slate-100">
                     {staffList.map((s) => (
                       <tr key={s._id} className="hover:bg-slate-50">
@@ -996,7 +997,8 @@ export const SuperAdminHospitalDashboard = () => {
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
+          )}
           </Card>
         </div>
 

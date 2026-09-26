@@ -560,18 +560,18 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
                 </div>
               </div>
 
-              <div className="border border-amber-200 rounded-xl overflow-hidden bg-white">
+              <div className="border border-amber-200 rounded-xl overflow-x-auto overflow-y-auto max-h-[520px] bg-white">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-amber-100/60 text-amber-900 uppercase text-[10px] border-b border-amber-200">
+                  <thead className="sticky top-0 z-10 bg-amber-100/95 backdrop-blur-xs text-amber-900 uppercase text-[10px] border-b border-amber-200 font-bold shadow-2xs">
                     <tr>
-                      <th className="p-3">Invoice Number</th>
-                      <th className="p-3">Patient Details</th>
-                      <th className="p-3">Attending Doctor</th>
-                      <th className="p-3">Billed Items Breakdown</th>
-                      <th className="p-3 text-right">Bill Total</th>
-                      <th className="p-3 text-right">Balance Due</th>
-                      <th className="p-3">Status</th>
-                      <th className="p-3 text-right">Audit & View</th>
+                      <th className="p-3 bg-amber-100">Invoice Number</th>
+                      <th className="p-3 bg-amber-100">Patient Details</th>
+                      <th className="p-3 bg-amber-100">Attending Doctor</th>
+                      <th className="p-3 bg-amber-100">Billed Items Breakdown</th>
+                      <th className="p-3 bg-amber-100 text-right">Bill Total</th>
+                      <th className="p-3 bg-amber-100 text-right">Balance Due</th>
+                      <th className="p-3 bg-amber-100">Status</th>
+                      <th className="p-3 bg-amber-100 text-right">Audit &amp; View</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-amber-100 text-slate-800">

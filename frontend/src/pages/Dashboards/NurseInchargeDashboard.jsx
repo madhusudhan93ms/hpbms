@@ -421,17 +421,17 @@ export const NurseInchargeDashboard = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[540px] rounded-xl border border-slate-200">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-600 uppercase tracking-wider text-[10px] border-b border-slate-200">
+              <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs text-slate-700 uppercase tracking-wider text-[10px] border-b border-slate-200 shadow-2xs font-bold">
                 <tr>
-                  <th className="p-3">UHID & Patient Name</th>
-                  <th className="p-3">Assigned Ward & Bed #</th>
-                  <th className="p-3">Assigned Care Team</th>
-                  <th className="p-3">Admitted Date</th>
-                  <th className="p-3 text-right">Daily Tariff</th>
-                  <th className="p-3 text-center">Status</th>
-                  <th className="p-3 text-right">Action</th>
+                  <th className="p-3 bg-slate-100">UHID &amp; Patient Name</th>
+                  <th className="p-3 bg-slate-100">Assigned Ward &amp; Bed #</th>
+                  <th className="p-3 bg-slate-100">Assigned Care Team</th>
+                  <th className="p-3 bg-slate-100">Admitted Date</th>
+                  <th className="p-3 bg-slate-100 text-right">Daily Tariff</th>
+                  <th className="p-3 bg-slate-100 text-center">Status</th>
+                  <th className="p-3 bg-slate-100 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-slate-800">

@@ -289,7 +289,7 @@ export const RegisterPatientModal = ({ isOpen, onClose, onSuccess, onIssueToken 
                   type="number"
                   value={formData.age}
                   onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                  placeholder="e.g. 35"
+                  placeholder="Age (Years)"
                 />
 
                 <div>

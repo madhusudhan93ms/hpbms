@@ -91,18 +91,18 @@ export const SuperAdminStaffPage = ({ roleFilter = null, title = 'All Staff' }) 
         </div>
 
         <Card>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[540px] rounded-xl border border-slate-200">
             <table className="w-full text-left text-xs">
-              <thead className="bg-neutral-100 text-neutral-600 uppercase tracking-wider text-[10px] border-b">
+              <thead className="sticky top-0 z-10 bg-neutral-100/95 backdrop-blur-xs text-neutral-700 uppercase tracking-wider text-[10px] border-b border-neutral-200 shadow-2xs font-bold">
                 <tr>
-                  <th className="p-3">Name</th>
-                  <th className="p-3">Hospital</th>
-                  <th className="p-3">Email</th>
-                  <th className="p-3">Role</th>
-                  <th className="p-3">Phone</th>
-                  <th className="p-3">Specialization</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Last Login</th>
+                  <th className="p-3 bg-neutral-100">Name</th>
+                  <th className="p-3 bg-neutral-100">Hospital</th>
+                  <th className="p-3 bg-neutral-100">Email</th>
+                  <th className="p-3 bg-neutral-100">Role</th>
+                  <th className="p-3 bg-neutral-100">Phone</th>
+                  <th className="p-3 bg-neutral-100">Specialization</th>
+                  <th className="p-3 bg-neutral-100">Status</th>
+                  <th className="p-3 bg-neutral-100">Last Login</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">

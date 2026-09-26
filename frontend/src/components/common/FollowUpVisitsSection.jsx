@@ -177,7 +177,7 @@ export const FollowUpVisitsSection = ({ onIssueToken, onViewHistory }) => {
       </div>
 
       {/* Roster of Follow-Ups */}
-      <div className="space-y-2.5">
+      <div className="space-y-2.5 max-h-[560px] overflow-y-auto pr-1">
         {displayedList.length > 0 ? (
           displayedList.map((item) => {
             const isOverdue = item.followUpStatus === 'MISSED_OVERDUE';
