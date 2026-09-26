@@ -29,7 +29,17 @@ export const FollowUpVisitsSection = ({ onIssueToken, onViewHistory }) => {
     setIsLoading(true);
     try {
       const res = await axiosClient.get('/emr/follow-ups');
-      setFollowUps(res.data || []);
+      const data = res.data || [];
+      setFollowUps(data);
+      const missed = data.filter((f) => f.followUpStatus === 'MISSED_OVERDUE');
+      const today = data.filter((f) => f.followUpStatus === 'TODAY');
+      if (missed.length > 0) {
+        setFilterTab('MISSED');
+      } else if (today.length > 0) {
+        setFilterTab('TODAY');
+      } else {
+        setFilterTab('ALL');
+      }
     } catch (err) {
       console.error('Failed to fetch follow-ups:', err);
       setFollowUps([]);
@@ -172,7 +182,28 @@ export const FollowUpVisitsSection = ({ onIssueToken, onViewHistory }) => {
           displayedList.map((item) => {
             const isOverdue = item.followUpStatus === 'MISSED_OVERDUE';
             const isToday = item.followUpStatus === 'TODAY';
-            const fDate = new Date(item.followUpDate).toLocaleDateString();
+            const fDate = item.followUpDate
+              ? new Date(item.followUpDate).toLocaleDateString(undefined, {
+                  weekday: 'short',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })
+              : 'Not specified';
+
+            let relativeText = '';
+            if (item.followUpDate) {
+              const todayDate = new Date();
+              todayDate.setHours(0, 0, 0, 0);
+              const targetDate = new Date(item.followUpDate);
+              targetDate.setHours(0, 0, 0, 0);
+              const diffDays = Math.round((targetDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+              if (diffDays === 0) relativeText = 'Due Today';
+              else if (diffDays === 1) relativeText = 'Tomorrow';
+              else if (diffDays === -1) relativeText = '1 day overdue';
+              else if (diffDays < -1) relativeText = `${Math.abs(diffDays)} days overdue`;
+              else if (diffDays > 1) relativeText = `In ${diffDays} days`;
+            }
 
             return (
               <div
@@ -209,9 +240,18 @@ export const FollowUpVisitsSection = ({ onIssueToken, onViewHistory }) => {
                       Phone: <a href={`tel:${item.patientId?.phone}`} className="text-indigo-600 underline">{item.patientId?.phone}</a>
                     </span>
                     <span>&bull;</span>
-                    <span>Doctor: <strong>{item.doctorId?.name || 'Doctor'}</strong></span>
+                    <span>Doctor: <strong>{item.doctorId?.name?.startsWith('Dr.') ? item.doctorId?.name : `Dr. ${item.doctorId?.name || 'Attending Doctor'}`}</strong></span>
                     <span>&bull;</span>
-                    <span>Follow-Up Date: <strong className={isOverdue ? 'text-rose-700' : 'text-slate-900'}>{fDate}</strong></span>
+                    <span className="flex items-center gap-1.5">
+                      Follow-Up Date: <strong className={isOverdue ? 'text-rose-700' : isToday ? 'text-amber-800' : 'text-slate-900'}>{fDate}</strong>
+                      {relativeText && (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                          isOverdue ? 'bg-rose-100 text-rose-800 border border-rose-200' : isToday ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}>
+                          {relativeText}
+                        </span>
+                      )}
+                    </span>
                   </div>
                   {item.diagnosis && (
                     <p className="text-[11px] text-slate-500">

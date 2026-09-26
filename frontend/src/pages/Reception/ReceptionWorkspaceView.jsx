@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '../../hooks/useDebounce';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { axiosClient } from '../../api/axiosClient';
 import { useSocket } from '../../providers/SocketProvider';
 import { useAuthStore } from '../../store/authStore';
+import { FollowUpVisitsSection } from '../../components/common/FollowUpVisitsSection';
+import { PatientHistoryModal } from '../../components/modals/PatientHistoryModal';
 import {
   Users,
   UserPlus,
@@ -30,8 +32,16 @@ import {
 
 export const ReceptionWorkspaceView = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
   const { socket } = useSocket();
+
+  const activeTabParam = (searchParams.get('tab') || '').toUpperCase();
+  const isFollowUpsTab = activeTabParam === 'FOLLOW_UPS';
+
+  // Clinical history modal state
+  const [historyPatientId, setHistoryPatientId] = useState(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Form mode in the on-screen corner panel: 'NEW' (Walk-in) | 'RETURNING' (Existing patient)
   const [formMode, setFormMode] = useState('NEW');
@@ -587,17 +597,72 @@ export const ReceptionWorkspaceView = () => {
         </div>
       </div>
 
+      {/* ── Desk Navigation Tabs (Walk-In vs Follow-Up Visits) ── */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/80 pb-1">
+        <button
+          type="button"
+          onClick={() => {
+            const next = new URLSearchParams(searchParams);
+            next.delete('tab');
+            setSearchParams(next);
+          }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            !isFollowUpsTab
+              ? 'bg-indigo-600 text-white shadow-xs font-black'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <UserPlus size={15} />
+          Patient Intake & OPD Queue
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            const next = new URLSearchParams(searchParams);
+            next.set('tab', 'FOLLOW_UPS');
+            setSearchParams(next);
+          }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            isFollowUpsTab
+              ? 'bg-indigo-600 text-white shadow-xs font-black'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Calendar size={15} />
+          Follow-Up Visits & Scheduled Return Dates
+        </button>
+      </div>
+
       {/* ── Main Clinic Workspace ── */}
-      <div className="space-y-5">
-        {/* =========================================================================
-            EMBEDDED PATIENT REGISTRATION & TOKEN DESK
-            (STAYS RIGHT ON THE SCREEN - NO MODAL POPUPS!)
-           ========================================================================= */}
-        <div className="rounded-2xl bg-white border-2 border-indigo-100 shadow-sm overflow-hidden">
-          {/* Active Issued Token Slip Banner (shown when a token is issued!) */}
-          {issuedTokenSlip && (
-            <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-white border-b-2 border-emerald-300">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {isFollowUpsTab ? (
+        <div className="space-y-5">
+          <FollowUpVisitsSection
+            onIssueToken={(patient) => {
+              setFormMode('RETURNING');
+              setSelectedReturningPatient(patient);
+              const next = new URLSearchParams(searchParams);
+              next.delete('tab');
+              setSearchParams(next);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onViewHistory={(id) => {
+              setHistoryPatientId(id);
+              setIsHistoryOpen(true);
+            }}
+          />
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {/* =========================================================================
+              EMBEDDED PATIENT REGISTRATION & TOKEN DESK
+              (STAYS RIGHT ON THE SCREEN - NO MODAL POPUPS!)
+             ========================================================================= */}
+          <div className="rounded-2xl bg-white border-2 border-indigo-100 shadow-sm overflow-hidden">
+            {/* Active Issued Token Slip Banner (shown when a token is issued!) */}
+            {issuedTokenSlip && (
+              <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-white border-b-2 border-emerald-300">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
                   <div className="p-3 rounded-2xl bg-emerald-600 text-white shadow-2xs shrink-0">
                     <Ticket size={24} />
@@ -1099,6 +1164,7 @@ export const ReceptionWorkspaceView = () => {
           </div>
         </div>
       </div>
+    )}
 
       {/* =========================================================================
           BELOW: REGISTERED PATIENT DIRECTORY (FULL WIDTH)
@@ -1257,6 +1323,15 @@ export const ReceptionWorkspaceView = () => {
           </table>
         </div>
       </Card>
+      {/* Patient Clinical History Modal */}
+      <PatientHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => {
+          setIsHistoryOpen(false);
+          setHistoryPatientId(null);
+        }}
+        initialIdentifier={historyPatientId}
+      />
     </div>
   );
 };
