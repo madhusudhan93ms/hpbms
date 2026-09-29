@@ -47,17 +47,24 @@ jobs:
         FAILED_STATUS=0
         NEW_STATUS=0
 
+        HAS_FAILED_TESTS="no"
         if [ -f test-results/.last-run.json ]; then
+          HAS_FAILED_TESTS=$(node -e "try { const d = JSON.parse(require('fs').readFileSync('test-results/.last-run.json', 'utf8')); console.log(Array.isArray(d.failedTests) && d.failedTests.length > 0 ? 'yes' : 'no'); } catch(e) { console.log('no'); }")
+        fi
+
+        if [ "$HAS_FAILED_TESTS" = "yes" ]; then
           echo "Running previously failed tests..."
-          npx playwright test --last-failed || FAILED_STATUS=$?
-          cp test-results/.last-run.json test-results/.failed-rerun.json
+          npx playwright test --last-failed --pass-with-no-tests || FAILED_STATUS=$?
+          if [ -f test-results/.last-run.json ]; then
+            cp test-results/.last-run.json test-results/.failed-rerun.json
+          fi
         else
-          echo "No previous Playwright result was found; skipping failed-test rerun."
+          echo "No previously failed Playwright tests found; skipping failed-test rerun."
         fi
 
         if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
           mapfile -t NEW_TEST_FILES < <(
-            git diff --diff-filter=A --name-only "$BASE_SHA" "$GITHUB_SHA" -- 'tests/*.spec.js' \
+            git diff --diff-filter=AM --name-only "$BASE_SHA" "$GITHUB_SHA" -- 'tests/*.spec.js' \
               | sed 's#^frontend/##'
           )
         else
@@ -65,15 +72,17 @@ jobs:
         fi
 
         if [ ${#NEW_TEST_FILES[@]} -gt 0 ]; then
-          echo "Running newly created Playwright test files:"
+          echo "Running modified / newly created Playwright test files:"
           printf '  %s\n' "${NEW_TEST_FILES[@]}"
-          npx playwright test "${NEW_TEST_FILES[@]}" || NEW_STATUS=$?
-          cp test-results/.last-run.json test-results/.new-tests-run.json
+          npx playwright test --pass-with-no-tests "${NEW_TEST_FILES[@]}" || NEW_STATUS=$?
+          if [ -f test-results/.last-run.json ]; then
+            cp test-results/.last-run.json test-results/.new-tests-run.json
+          fi
         else
-          echo "No newly created Playwright test files were found."
+          echo "No modified / newly created Playwright test files were found."
         fi
 
-        node -e "const fs=require('fs'); const files=['test-results/.failed-rerun.json','test-results/.new-tests-run.json'].filter(fs.existsSync); if(files.length){const failed=[...new Set(files.flatMap(f=>JSON.parse(fs.readFileSync(f,'utf8')).failedTests||[]))]; fs.writeFileSync('test-results/.last-run.json',JSON.stringify({status:failed.length?'failed':'passed',failedTests:failed},null,2));}"
+        node -e "const fs=require('fs'); const files=['test-results/.failed-rerun.json','test-results/.new-tests-run.json'].filter(fs.existsSync); if(files.length){const failed=[...new Set(files.flatMap(f=>JSON.parse(fs.readFileSync(f,'utf8')).failedTests||[]))]; fs.writeFileSync('test-results/.last-run.json',JSON.stringify({status:failed.length?'failed':'passed',failedTests:failed},null,2));} else { fs.mkdirSync('test-results', { recursive: true }); fs.writeFileSync('test-results/.last-run.json', JSON.stringify({ status: 'passed', failedTests: [] }, null, 2)); }"
 
         if [ "$FAILED_STATUS" -ne 0 ] || [ "$NEW_STATUS" -ne 0 ]; then
           exit 1
