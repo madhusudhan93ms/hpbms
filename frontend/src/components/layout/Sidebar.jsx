@@ -50,6 +50,94 @@ export const WORK_MODE_NAVIGATION = [
   { title: 'HR Desk', path: '/hr/dashboard', icon: 'UserCheck', module: 'hr', category: 'Clinic Operations', requiredRoles: ['HR_MANAGER'] },
 ];
 
+export const CANONICAL_CATEGORY_ORDER = [
+  'Executive & Setup',
+  'Executive & Operations',
+  'Clinical Workstation',
+  'Front Desk & Billing',
+  'Inpatient & Ward',
+  'Support & Diagnostics',
+  'Clinic Operations',
+  'System & Analytics',
+  'Live Tracking & Audit',
+  'Emergency Services',
+  'Workstation Desks',
+  'General Modules',
+  'General',
+];
+
+export const CANONICAL_ITEM_ORDER = [
+  // Clinical Workstation
+  '/doctor/dashboard',
+  '/doctor/dashboard?tab=FOLLOW_UPS',
+  '/doctor/dashboard?tab=COMPLETED',
+  '/doctor/dashboard?tab=DEPT_RESPONSES',
+
+  // Front Desk & Billing
+  '/reception/registered-patients',
+  '/reception/registered-patients?tab=FOLLOW_UPS',
+  '/billing/dashboard',
+  '/billing/dashboard?tab=RECEIPTS',
+
+  // Inpatient & Ward
+  '/nurse-incharge/dashboard?tab=REQUISITIONS',
+  '/nurse-incharge/dashboard?tab=ADMITTED',
+  '/admin/bed-matrix',
+  '/nurse/bed-matrix',
+  '/nurse-incharge/dashboard?tab=REQUESTS',
+  '/nurse-incharge/dashboard?tab=TASKS',
+  '/nurse-incharge/dashboard',
+
+  // Support & Diagnostics
+  '/pharmacy/dashboard',
+  '/pharmacy/stock',
+  '/pharmacy/expiry-alerts',
+  '/pharmacy/audit',
+  '/laboratory/dashboard',
+  '/laboratory/dashboard?tab=SAMPLES',
+  '/laboratory/dashboard?tab=RESULTS',
+  '/laboratory/dashboard?tab=REPORTS',
+  '/radiology/dashboard',
+  '/radiology/dashboard?tab=DICOM',
+  '/radiology/dashboard?tab=REPORTS',
+
+  // Clinic Operations
+  '/inventory/dashboard',
+  '/inventory/indents',
+  '/inventory/purchase-orders',
+  '/inventory/reorder-alerts',
+  '/hr/dashboard',
+  '/hr/roster',
+  '/hr/attendance',
+  '/hr/payroll',
+
+  // Executive Setup & Operations (for Hospital Admin)
+  '/admin/dashboard',
+  '/admin/staff',
+  '/admin/departments',
+  '/admin/tariffs',
+  '/admin/doctors-management',
+  '/admin/nurses-management',
+  '/admin/reception-management',
+  '/admin/billing-management',
+  '/admin/pharmacy-management',
+  '/admin/laboratory-management',
+  '/admin/radiology-management',
+  '/admin/patients-management',
+
+  // System & Analytics
+  '/admin/reports',
+  '/admin/reports?tab=audit',
+  '/admin/dashboard?tab=notifications',
+  '/admin/plan-details',
+  '/admin/usage-limits',
+
+  // Live Tracking & Emergency
+  '/workflow/tracker',
+  '/emergency',
+  '/admin/emergency',
+];
+
 // Canonical workflow path resolution mapping for live navigation notifications
 // Resolves data.targetRoute || data.linkedPath || data.payload?.linkedPath || workflowPaths
 export const WORKFLOW_PATHS = {
@@ -57,23 +145,24 @@ export const WORKFLOW_PATHS = {
 };
 
 const ALL_MODULE_NAVIGATION = [
-  { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker' },
-  { title: 'Reception Desk', path: '/reception/dashboard', icon: 'LayoutDashboard', module: 'appointments' },
-  { title: 'Clinical EMR Desk', path: '/doctor/dashboard', icon: 'Stethoscope', module: 'doctorConsultation' },
-  { title: 'IPD Requisitions', path: '/nurse-incharge/dashboard?tab=REQUISITIONS', icon: 'BedDouble', module: 'nursing' },
-  { title: 'Admitted Inpatients', path: '/nurse-incharge/dashboard?tab=ADMITTED', icon: 'UserCheck', module: 'nursing' },
-  { title: 'Ward Bed Matrix', path: '/admin/bed-matrix', icon: 'LayoutGrid', module: 'ipd' },
-  { title: 'Patient Requests', path: '/nurse-incharge/dashboard?tab=REQUESTS', icon: 'Activity', module: 'nursing' },
-  { title: 'Medication & Tasks', path: '/nurse-incharge/dashboard?tab=TASKS', icon: 'Stethoscope', module: 'nursing' },
-  { title: 'Laboratory Desk', path: '/laboratory/dashboard', icon: 'TestTube', module: 'laboratory' },
-  { title: 'Radiology Desk', path: '/radiology/dashboard', icon: 'Scan', module: 'radiology' },
-  { title: 'Pharmacy Desk', path: '/pharmacy/dashboard', icon: 'Pill', module: 'pharmacy' },
-  { title: 'Pharmacy Stock & Prediction', path: '/pharmacy/stock', icon: 'Boxes', module: 'pharmacy' },
-  { title: 'Central Billing Desk', path: '/billing/dashboard', icon: 'CreditCard', module: 'billing' },
-  { title: 'Receipts & Payments', path: '/billing/dashboard?tab=RECEIPTS', icon: 'Receipt', module: 'billing' },
-  { title: 'Emergency Console', path: '/emergency', icon: 'ShieldAlert', module: 'emergency' },
-  { title: 'Inventory Desk', path: '/inventory/dashboard', icon: 'Boxes', module: 'inventory' },
-  { title: 'HR Desk', path: '/hr/dashboard', icon: 'UserCheck', module: 'hr' },
+  { title: 'Reception Desk', path: '/reception/registered-patients', icon: 'LayoutDashboard', module: 'appointments', category: 'Front Desk & Billing' },
+  { title: 'Follow-Up Visits', path: '/reception/registered-patients?tab=FOLLOW_UPS', icon: 'Calendar', module: 'appointments', category: 'Front Desk & Billing' },
+  { title: 'Central Billing Desk', path: '/billing/dashboard', icon: 'CreditCard', module: 'billing', category: 'Front Desk & Billing' },
+  { title: 'Receipts & Payments', path: '/billing/dashboard?tab=RECEIPTS', icon: 'Receipt', module: 'billing', category: 'Front Desk & Billing' },
+  { title: 'Clinical EMR Desk', path: '/doctor/dashboard', icon: 'Stethoscope', module: 'doctorConsultation', category: 'Clinical Workstation' },
+  { title: 'IPD Requisitions', path: '/nurse-incharge/dashboard?tab=REQUISITIONS', icon: 'BedDouble', module: 'nursing', category: 'Inpatient & Ward' },
+  { title: 'Admitted Inpatients', path: '/nurse-incharge/dashboard?tab=ADMITTED', icon: 'UserCheck', module: 'nursing', category: 'Inpatient & Ward' },
+  { title: 'Ward Bed Matrix', path: '/admin/bed-matrix', icon: 'LayoutGrid', module: 'ipd', category: 'Inpatient & Ward' },
+  { title: 'Patient Requests', path: '/nurse-incharge/dashboard?tab=REQUESTS', icon: 'Activity', module: 'nursing', category: 'Inpatient & Ward' },
+  { title: 'Medication & Tasks', path: '/nurse-incharge/dashboard?tab=TASKS', icon: 'Stethoscope', module: 'nursing', category: 'Inpatient & Ward' },
+  { title: 'Laboratory Desk', path: '/laboratory/dashboard', icon: 'TestTube', module: 'laboratory', category: 'Support & Diagnostics' },
+  { title: 'Radiology Desk', path: '/radiology/dashboard', icon: 'Scan', module: 'radiology', category: 'Support & Diagnostics' },
+  { title: 'Pharmacy Desk', path: '/pharmacy/dashboard', icon: 'Pill', module: 'pharmacy', category: 'Support & Diagnostics' },
+  { title: 'Pharmacy Stock & Prediction', path: '/pharmacy/stock', icon: 'Boxes', module: 'pharmacy', category: 'Support & Diagnostics' },
+  { title: 'Inventory Desk', path: '/inventory/dashboard', icon: 'Boxes', module: 'inventory', category: 'Clinic Operations' },
+  { title: 'HR Desk', path: '/hr/dashboard', icon: 'UserCheck', module: 'hr', category: 'Clinic Operations' },
+  { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker', category: 'Live Tracking & Audit' },
+  { title: 'Emergency Console', path: '/emergency', icon: 'ShieldAlert', module: 'emergency', category: 'Emergency Services' },
 ];
 
 const checkItemPermission = (user, item) => {

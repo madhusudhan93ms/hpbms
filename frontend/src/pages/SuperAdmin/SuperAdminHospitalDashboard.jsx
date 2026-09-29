@@ -373,6 +373,7 @@ export const SuperAdminHospitalDashboard = () => {
   // Password Change Modal State
   const [selectedStaffForPassword, setSelectedStaffForPassword] = useState(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordUpdateSuccess, setPasswordUpdateSuccess] = useState('');
   const [passwordUpdateError, setPasswordUpdateError] = useState('');
@@ -526,6 +527,7 @@ export const SuperAdminHospitalDashboard = () => {
   const handleOpenPasswordModal = (staff) => {
     setSelectedStaffForPassword(staff);
     setNewPasswordInput('');
+    setConfirmPasswordInput('');
     setPasswordUpdateSuccess('');
     setPasswordUpdateError('');
   };
@@ -533,6 +535,10 @@ export const SuperAdminHospitalDashboard = () => {
   const handleSavePassword = async () => {
     if (!newPasswordInput || newPasswordInput.trim().length < 8) {
       setPasswordUpdateError('Password must be at least 8 characters long');
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      setPasswordUpdateError('New password and Confirm password do not match');
       return;
     }
 
@@ -1042,11 +1048,25 @@ export const SuperAdminHospitalDashboard = () => {
                 <label className="text-xs font-bold text-slate-700">New Password</label>
                 <input
                   type="text"
-                  placeholder="Enter new password"
+                  placeholder="Enter new password (min. 8 characters)"
                   value={newPasswordInput}
                   onChange={(e) => setNewPasswordInput(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Confirm New Password</label>
+                <input
+                  type="text"
+                  placeholder="Re-enter new password to confirm"
+                  value={confirmPasswordInput}
+                  onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                {confirmPasswordInput && newPasswordInput !== confirmPasswordInput && (
+                  <p className="text-[11px] text-rose-500 font-semibold mt-1">Passwords do not match</p>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">

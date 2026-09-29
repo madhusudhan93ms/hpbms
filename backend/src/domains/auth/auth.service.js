@@ -684,9 +684,12 @@ export class AuthService {
       if (!adminDoc) {
         throw new ApiError(404, 'Admin account not found. Please log out and log in again.', null, 'NOT_FOUND');
       }
-      if (!adminPassword || !(await adminDoc.comparePassword(adminPassword))) {
-        // Use 400 (not 401) so the frontend auth interceptor does NOT auto-logout the admin.
-        // A wrong verification password is a bad-input error, not an authentication failure.
+      if (!adminPassword) {
+        throw new ApiError(400, 'Admin verification password is required. Please enter your own logged-in Admin password.', null, 'INVALID_ADMIN_PASSWORD');
+      }
+      const isMatch = (await adminDoc.comparePassword(adminPassword)) ||
+        (adminPassword.trim() !== adminPassword && (await adminDoc.comparePassword(adminPassword.trim())));
+      if (!isMatch) {
         throw new ApiError(400, 'Invalid Admin verification password. Please enter your own logged-in Admin password correctly.', null, 'INVALID_ADMIN_PASSWORD');
       }
     }
