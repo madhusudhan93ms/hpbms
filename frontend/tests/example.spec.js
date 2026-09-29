@@ -6,17 +6,16 @@ test.describe('Login & Core Application Load', () => {
     // Open login page
     await page.goto('/login');
 
-    // Verify page title / heading
-    await expect(page).toHaveTitle(/HPMBS|Hospital/i);
-    await expect(page.getByRole('heading', { name: /HPMBS Enterprise/i })).toBeVisible();
+    // Verify page heading and branding
+    await expect(page.getByRole('heading', { name: /Sri Vijaya Lakshmi Hospital/i })).toBeVisible();
     await expect(page.getByText(/Enter your official hospital credentials/i)).toBeVisible();
 
     // Fill credentials
-    await page.getByLabel(/Account Email \/ Phone \/ Login ID/i).fill('admin@citygeneral.com');
-    await page.getByLabel('Password').fill('Password123!');
+    await page.getByLabel(/Account Email \/ Staff ID/i).fill('admin@hospital.com');
+    await page.getByLabel('Password', { exact: true }).fill('Password123!');
 
     // Verify Submit Button exists and is enabled
-    const submitBtn = page.getByRole('button', { name: /Sign In as Staff \/ Admin/i });
+    const submitBtn = page.getByRole('button', { name: /Sign In to Workstation/i });
     await expect(submitBtn).toBeVisible();
     await expect(submitBtn).toBeEnabled();
   });
