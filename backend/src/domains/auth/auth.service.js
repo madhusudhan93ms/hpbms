@@ -41,9 +41,8 @@ export class AuthService {
   ];
 
   static staffManagementFilter(staffId, requestingUser) {
-    if (requestingUser?.role === 'SUPER_ADMIN') return { _id: staffId };
     const hospitalId = requestingUser?.hospitalId?._id || requestingUser?.hospitalId;
-    if (!hospitalId) throw new ApiError(403, 'Hospital context is required for staff management.', null, 'HOSPITAL_CONTEXT_REQUIRED');
+    if (!hospitalId) return { _id: staffId };
     return { _id: staffId, hospitalId };
   }
   static async assertStaffCreationAllowed(data, requestingUser) {
@@ -55,38 +54,14 @@ export class AuthService {
     if (!hospital || !hospital.isActive || hospital.status !== 'APPROVED') {
       throw new ApiError(403, 'This hospital account is not active for staff provisioning.', null, 'HOSPITAL_INACTIVE');
     }
-    if (hospital.subscriptionEndDate && hospital.subscriptionEndDate < new Date()) {
-      throw new ApiError(403, 'The hospital subscription has expired. Upgrade the plan to create staff.', null, 'SUBSCRIPTION_EXPIRED');
-    }
 
     const role = data.role || 'DOCTOR';
-    const roleLimitKey = {
-      HOSPITAL_ADMIN: 'hospitalAdmins', DOCTOR: 'doctors', RECEPTIONIST: 'receptionists',
-      NURSE: 'nurses', NURSE_INCHARGE: 'nurses', LAB_TECH: 'laboratoryStaff',
-      RADIOLOGIST: 'radiologyStaff', PHARMACIST: 'pharmacyStaff', CASHIER: 'billingStaff',
-    }[role];
     const moduleKey = {
       DOCTOR: 'doctors', RECEPTIONIST: 'reception', NURSE: 'nursing', NURSE_INCHARGE: 'nursing',
       LAB_TECH: 'laboratory', RADIOLOGIST: 'radiology', PHARMACIST: 'pharmacy', CASHIER: 'billing',
     }[role];
     if (moduleKey && hospital.enabledModules?.[moduleKey] === false) {
       throw new ApiError(403, `The ${moduleKey} module is not enabled for this hospital.`, null, 'MODULE_DISABLED');
-    }
-
-    const base = { hospitalId: hospital._id, isActive: true };
-    const totalStaff = await User.countDocuments({ ...base, role: { $nin: ['SUPER_ADMIN', 'PATIENT', 'GUARDIAN'] } });
-    const totalLimit = Number(hospital.staffLimits?.totalStaff);
-    if (Number.isFinite(totalLimit) && totalStaff >= totalLimit) {
-      throw new ApiError(403, `The total staff limit (${totalLimit}) for your subscription has been reached.`, null, 'TOTAL_STAFF_LIMIT_REACHED');
-    }
-    if (roleLimitKey) {
-      const roleCount = roleLimitKey === 'nurses'
-        ? await User.countDocuments({ ...base, role: { $in: ['NURSE', 'NURSE_INCHARGE'] } })
-        : await User.countDocuments({ ...base, role });
-      const limit = Number(hospital.staffLimits?.[roleLimitKey]);
-      if (Number.isFinite(limit) && roleCount >= limit) {
-        throw new ApiError(403, `The ${roleLimitKey} limit (${limit}) for your current subscription plan has been reached.`, null, 'ROLE_STAFF_LIMIT_REACHED');
-      }
     }
   }
 
@@ -107,40 +82,23 @@ export class AuthService {
     const roleDoc = await Role.findOne({ code: user.role });
     const domain = user.hospitalId?.domain || user.hospitalId?.subdomain || '';
 
-    let defaultRoute = '/dashboard';
-    if (user.role === 'SUPER_ADMIN') {
-      defaultRoute = '/admin/dashboard';
-    } else if (domain) {
-      const baseMap = {
-        HOSPITAL_ADMIN: `/${domain}/admin/dashboard`,
-        DOCTOR: `/${domain}/doctor/dashboard`,
-        NURSE: `/${domain}/nurse/dashboard`,
-        NURSE_INCHARGE: `/${domain}/nurse-incharge/dashboard`,
-        RECEPTIONIST: `/${domain}/reception/dashboard`,
-        PHARMACIST: `/${domain}/pharmacy/dashboard`,
-        LAB_TECH: `/${domain}/laboratory/dashboard`,
-        RADIOLOGIST: `/${domain}/radiology/dashboard`,
-        CASHIER: `/${domain}/billing/dashboard`,
-        PATIENT: `/${domain}/patient/dashboard`,
-        GUARDIAN: `/${domain}/guardian/dashboard`,
-      };
-      defaultRoute = baseMap[user.role] || `/${domain}/dashboard`;
-    } else {
-      const baseMap = {
-        HOSPITAL_ADMIN: '/hospital-admin/dashboard',
-        DOCTOR: '/doctor/dashboard',
-        NURSE: '/nursing/dashboard',
-        NURSE_INCHARGE: '/nurse-incharge/dashboard',
-        RECEPTIONIST: '/reception/dashboard',
-        PHARMACIST: '/pharmacy/dashboard',
-        LAB_TECH: '/laboratory/dashboard',
-        RADIOLOGIST: '/radiology/dashboard',
-        CASHIER: '/billing/dashboard',
-        PATIENT: '/patient-portal/dashboard',
-        GUARDIAN: '/guardian-portal/dashboard',
-      };
-      defaultRoute = baseMap[user.role] || '/dashboard';
-    }
+    const baseMap = {
+      HOSPITAL_ADMIN: '/admin/dashboard',
+      DOCTOR: '/doctor/dashboard',
+      NURSE: '/nursing/dashboard',
+      NURSE_INCHARGE: '/nurse-incharge/dashboard',
+      RECEPTIONIST: '/reception/dashboard',
+      PHARMACIST: '/pharmacy/dashboard',
+      LAB_TECH: '/laboratory/dashboard',
+      RADIOLOGIST: '/radiology/dashboard',
+      CASHIER: '/billing/dashboard',
+      INVENTORY_MANAGER: '/inventory/dashboard',
+      HR_MANAGER: '/hr/dashboard',
+      PATIENT: '/patient-portal/dashboard',
+      GUARDIAN: '/guardian-portal/dashboard',
+    };
+    const baseRoute = baseMap[user.role] || '/admin/dashboard';
+    const defaultRoute = user.role === 'SUPER_ADMIN' ? '/admin/dashboard' : (domain ? `/${domain}${baseRoute}` : baseRoute);
 
     return {
       user: {
@@ -384,7 +342,7 @@ export class AuthService {
     });
 
     if (!matchedPatient) {
-      throw new ApiError(401, 'Date of Birth (DOB) does not match our records for this patient. Please verify your date of birth.', null, 'DOB_MISMATCH');
+      throw new ApiError(401, 'Date of Birth (DOB) does not match patient records. Please verify your date of birth.', null, 'DOB_MISMATCH');
     }
 
     // Look up existing user strictly with role 'PATIENT' to prevent accidental admin/staff collision
@@ -676,7 +634,8 @@ export class AuthService {
 
   static async updateStaffPassword(staffId, { newPassword, adminPassword }, adminUser) {
     const adminId = adminUser?.id || adminUser?._id;
-    if (!newPassword || String(newPassword).length < 8) {
+    const cleanNewPass = String(newPassword || '').trim();
+    if (!cleanNewPass || cleanNewPass.length < 8) {
       throw new ApiError(400, 'New password must be at least 8 characters long.', null, 'WEAK_PASSWORD');
     }
     if (adminUser?.role !== 'SUPER_ADMIN') {
@@ -684,13 +643,9 @@ export class AuthService {
       if (!adminDoc) {
         throw new ApiError(404, 'Admin account not found. Please log out and log in again.', null, 'NOT_FOUND');
       }
-      if (!adminPassword) {
-        throw new ApiError(400, 'Admin verification password is required. Please enter your own logged-in Admin password.', null, 'INVALID_ADMIN_PASSWORD');
-      }
-      const isMatch = (await adminDoc.comparePassword(adminPassword)) ||
-        (adminPassword.trim() !== adminPassword && (await adminDoc.comparePassword(adminPassword.trim())));
-      if (!isMatch) {
-        throw new ApiError(400, 'Invalid Admin verification password. Please enter your own logged-in Admin password correctly.', null, 'INVALID_ADMIN_PASSWORD');
+      const cleanAdminPass = String(adminPassword || '').trim();
+      if (!cleanAdminPass || !(await adminDoc.comparePassword(cleanAdminPass))) {
+        throw new ApiError(400, 'Invalid Admin verification password. Please enter your logged-in Admin password.', null, 'INVALID_ADMIN_PASSWORD');
       }
     }
 
@@ -699,7 +654,7 @@ export class AuthService {
       throw new ApiError(404, 'Staff user account not found', null, 'NOT_FOUND');
     }
 
-    staffDoc.passwordHash = await bcrypt.hash(newPassword, 12);
+    staffDoc.passwordHash = await bcrypt.hash(cleanNewPass, 12);
     staffDoc.assignedPasswordHint = '';
     staffDoc.passwordResetToken = null;
     staffDoc.passwordResetExpires = null;

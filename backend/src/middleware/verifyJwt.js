@@ -132,17 +132,6 @@ export const verifyJwt = async (req, res, next) => {
     const decoded = jwt.verify(token, env.JWT_SECRET);
     req.user = decoded;
 
-    // Platform Super Admin operational rule
-    if (
-      decoded.role === 'SUPER_ADMIN' &&
-      req.method !== 'GET' &&
-      !req.originalUrl.startsWith('/api/v1/saas') &&
-      !req.originalUrl.startsWith('/api/v1/workflow') &&
-      !req.originalUrl.startsWith('/api/v1/auth') &&
-      !req.originalUrl.startsWith('/api/v1/notifications')
-    ) {
-      return sendError(res, 403, 'Super Admin accounts have read-only platform access and cannot modify hospital operational data.', null, 'OPERATIONAL_ACCESS_FORBIDDEN');
-    }
 
     // Always keep currentUser roles, status, hospitalId & permissions in sync with DB
     let currentUser = null;
@@ -224,24 +213,14 @@ export const verifyJwt = async (req, res, next) => {
     }
 
     const module = moduleForRequest(req.originalUrl);
-    if (
-      module &&
-      req.method !== 'GET' &&
-      ['HOSPITAL_ADMIN', 'SUPER_ADMIN'].includes(req.user.role) &&
-      !hasOperationalRoleForModule(req.user, module)
-    ) {
-      return sendError(
-        res,
-        403,
-        'Governance access is read-only for operational workflows. A hospital administrator needs the corresponding staff role; SuperAdmin must not perform tenant clinical work.',
-        null,
-        'OPERATIONAL_ROLE_REQUIRED',
-      );
-    }
     if (module && decoded.role !== 'SUPER_ADMIN' && currentUser) {
-      const action = req.method === 'GET' ? 'view' : req.method === 'POST' ? 'create' : req.method === 'DELETE' ? 'delete' : 'edit';
-      if (!hasPermission(currentUser, module, action)) {
-        return sendError(res, 403, 'You do not have permission to perform this action.', null, 'FORBIDDEN');
+      if (req.user.role === 'HOSPITAL_ADMIN' || req.user.role === 'SUPER_ADMIN') {
+        // Hospital Admin has full administrative and operational authority
+      } else {
+        const action = req.method === 'GET' ? 'view' : req.method === 'POST' ? 'create' : req.method === 'DELETE' ? 'delete' : 'edit';
+        if (!hasPermission(currentUser, module, action)) {
+          return sendError(res, 403, 'You do not have permission to perform this action.', null, 'FORBIDDEN');
+        }
       }
     }
 
@@ -265,6 +244,7 @@ export const verifyJwt = async (req, res, next) => {
     if (!isAuthProfileOrLogout && !isSuperAdminSaas) {
       await activateVerifiedTenantConnection(req.user);
     }
+
     delete req.user._preloadedHospital;
     next();
   } catch (error) {

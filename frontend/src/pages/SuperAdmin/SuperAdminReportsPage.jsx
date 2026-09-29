@@ -858,7 +858,7 @@ export const SuperAdminReportsPage = () => {
             )}
 
             <PasswordInput
-              label="New Password"
+              label="1. New Password"
               labelClassName="text-slate-700 font-bold"
               placeholder="Enter new password (min. 8 characters)"
               value={newPasswordInput}
@@ -866,20 +866,21 @@ export const SuperAdminReportsPage = () => {
               inputClassName="font-mono font-bold"
             />
 
-            <PasswordInput
-              label="Confirm New Password"
-              labelClassName="text-slate-700 font-bold"
-              placeholder="Re-enter new password to confirm"
-              value={confirmPasswordInput}
-              onChange={(e) => setConfirmPasswordInput(e.target.value)}
-              inputClassName="font-mono font-bold"
-              helperText={
-                confirmPasswordInput && newPasswordInput !== confirmPasswordInput
-                  ? 'Passwords do not match!'
-                  : ''
-              }
-              error={confirmPasswordInput && newPasswordInput !== confirmPasswordInput ? 'Passwords do not match' : ''}
-            />
+            <div>
+              <PasswordInput
+                label="2. Confirm New Password"
+                labelClassName="text-slate-700 font-bold"
+                placeholder="Re-enter the new password to confirm"
+                value={confirmPasswordInput}
+                onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                inputClassName={`font-mono font-bold ${
+                  confirmPasswordInput && newPasswordInput !== confirmPasswordInput ? 'border-rose-400 bg-rose-50/50' : ''
+                }`}
+              />
+              {confirmPasswordInput && newPasswordInput !== confirmPasswordInput && (
+                <p className="text-[11px] text-rose-600 font-medium mt-1">Passwords do not match</p>
+              )}
+            </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={() => setSelectedStaffForPassword(null)}>

@@ -246,19 +246,7 @@ const HospitalAdminDashboardInner = () => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
 
-  const formatTenantPath = (path) => {
-    if (user?.role === 'SUPER_ADMIN') return path;
-    const domainFromPath = location.pathname.split('/')[1];
-    const isKnownNonTenant = ['admin', 'hospital-admin', 'doctor', 'reception', 'billing', 'pharmacy', 'laboratory', 'radiology', 'nursing', '403', 'login', 'reset-password'].includes(domainFromPath);
-    const domain = user?.hospitalDomain || (!isKnownNonTenant && domainFromPath ? domainFromPath : null);
-
-    if (!domain) {
-      if (path.startsWith('/admin')) return path.replace(/^\/admin/, '/hospital-admin');
-      return path;
-    }
-    if (path.startsWith(`/${domain}`)) return path;
-    return `/${domain}${path}`;
-  };
+  const formatTenantPath = (path) => path;
 
   useEffect(() => {
     fetchStaff();
@@ -552,23 +540,23 @@ const HospitalAdminDashboardInner = () => {
   const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
     if (!selectedStaff) return;
+    if (!changeForm.newPassword || changeForm.newPassword.length < 8) {
+      setErrorMsg('New password must be at least 8 characters long.');
+      return;
+    }
     if (changeForm.newPassword !== changeForm.confirmPassword) {
       setErrorMsg('New password and Confirm password do not match. Please re-enter both carefully.');
       return;
     }
-    if (changeForm.newPassword.length < 8) {
-      setErrorMsg('New password must be at least 8 characters long.');
-      return;
-    }
     if (!changeForm.adminPassword) {
-      setErrorMsg('Please enter your own logged-in Admin password in the verification field.');
+      setErrorMsg('Please enter your logged-in Admin account password for verification.');
       return;
     }
     setIsLoading(true);
     setErrorMsg(null);
     try {
       await axiosClient.patch(`/auth/staff/${selectedStaff._id}/password`, {
-        newPassword: changeForm.newPassword.trim(),
+        newPassword: changeForm.newPassword,
         adminPassword: changeForm.adminPassword,
       });
       setSuccessMsg(`Password for ${selectedStaff.name} (${selectedStaff.email}) updated successfully!`);
@@ -577,7 +565,7 @@ const HospitalAdminDashboardInner = () => {
       setChangeForm({ newPassword: '', confirmPassword: '', adminPassword: '' });
       fetchStaff();
     } catch (err) {
-      setErrorMsg(err.error?.message || err.response?.data?.message || err.message || 'Invalid Admin Password verification');
+      setErrorMsg(err.response?.data?.message || err.error?.message || err.message || 'Invalid Admin Password verification');
     } finally {
       setIsLoading(false);
     }
@@ -1174,12 +1162,11 @@ const HospitalAdminDashboardInner = () => {
               </button>
             </div>
 
-            <div className="modal-body max-h-[75vh] overflow-y-auto">
+            <div className="modal-body">
               <form onSubmit={handleChangePasswordSubmit} className="space-y-4 text-xs">
                 {errorMsg && (
-                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 flex items-start gap-2">
-                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
-                    <span>{errorMsg}</span>
+                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 flex items-center gap-2">
+                    <AlertCircle size={16} /> {errorMsg}
                   </div>
                 )}
 

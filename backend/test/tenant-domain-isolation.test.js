@@ -12,15 +12,47 @@ import { tenantOwnedModels } from '../src/domains/saas/tenantMigration.service.j
 
 import { autoEnsureSystemCredentials } from '../src/config/autoSeed.js';
 
+import { connectDB } from '../src/config/database.js';
+
 let hospitalA;
 let hospitalB;
 
 test.before(async () => {
   if (mongoose.connection.readyState === 0) {
-    const mongoUri = process.env.MONGODB_URI || env.MONGODB_URI || 'mongodb://127.0.0.1:27017/hospital-management';
-    await mongoose.connect(mongoUri);
+    await connectDB();
   }
   await autoEnsureSystemCredentials();
+
+  let platformHosp = await Hospital.findOne({ code: 'PLATFORM' });
+  if (!platformHosp) {
+    platformHosp = await Hospital.create({
+      name: 'HPMBS SaaS Platform Owner',
+      code: 'PLATFORM',
+      subdomain: 'platform',
+      domain: 'platform-master',
+      status: 'APPROVED',
+      plan: 'ENTERPRISE',
+      contactName: 'Platform Master Owner',
+      contactEmail: 'superadmin@gmail.com',
+      contactPhone: '+1 (800) 555-SAAS',
+      licenseNumber: 'PLATFORM-MASTER-001',
+      isActive: true,
+    });
+  }
+  let superAdmin = await User.findOne({ email: 'superadmin@gmail.com' });
+  if (!superAdmin) {
+    const bcrypt = (await import('bcryptjs')).default;
+    superAdmin = await User.create({
+      hospitalId: platformHosp._id,
+      name: 'Platform Master Owner',
+      email: 'superadmin@gmail.com',
+      passwordHash: await bcrypt.hash('000000000000', 12),
+      role: 'SUPER_ADMIN',
+      phone: '+1 (800) 555-SAAS',
+      status: 'ACTIVE',
+      isActive: true,
+    });
+  }
 });
 
 test.after(async () => {

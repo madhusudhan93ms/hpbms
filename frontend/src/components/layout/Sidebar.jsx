@@ -145,24 +145,23 @@ export const WORKFLOW_PATHS = {
 };
 
 const ALL_MODULE_NAVIGATION = [
-  { title: 'Reception Desk', path: '/reception/registered-patients', icon: 'LayoutDashboard', module: 'appointments', category: 'Front Desk & Billing' },
-  { title: 'Follow-Up Visits', path: '/reception/registered-patients?tab=FOLLOW_UPS', icon: 'Calendar', module: 'appointments', category: 'Front Desk & Billing' },
-  { title: 'Central Billing Desk', path: '/billing/dashboard', icon: 'CreditCard', module: 'billing', category: 'Front Desk & Billing' },
-  { title: 'Receipts & Payments', path: '/billing/dashboard?tab=RECEIPTS', icon: 'Receipt', module: 'billing', category: 'Front Desk & Billing' },
-  { title: 'Clinical EMR Desk', path: '/doctor/dashboard', icon: 'Stethoscope', module: 'doctorConsultation', category: 'Clinical Workstation' },
-  { title: 'IPD Requisitions', path: '/nurse-incharge/dashboard?tab=REQUISITIONS', icon: 'BedDouble', module: 'nursing', category: 'Inpatient & Ward' },
-  { title: 'Admitted Inpatients', path: '/nurse-incharge/dashboard?tab=ADMITTED', icon: 'UserCheck', module: 'nursing', category: 'Inpatient & Ward' },
-  { title: 'Ward Bed Matrix', path: '/admin/bed-matrix', icon: 'LayoutGrid', module: 'ipd', category: 'Inpatient & Ward' },
-  { title: 'Patient Requests', path: '/nurse-incharge/dashboard?tab=REQUESTS', icon: 'Activity', module: 'nursing', category: 'Inpatient & Ward' },
-  { title: 'Medication & Tasks', path: '/nurse-incharge/dashboard?tab=TASKS', icon: 'Stethoscope', module: 'nursing', category: 'Inpatient & Ward' },
-  { title: 'Laboratory Desk', path: '/laboratory/dashboard', icon: 'TestTube', module: 'laboratory', category: 'Support & Diagnostics' },
-  { title: 'Radiology Desk', path: '/radiology/dashboard', icon: 'Scan', module: 'radiology', category: 'Support & Diagnostics' },
-  { title: 'Pharmacy Desk', path: '/pharmacy/dashboard', icon: 'Pill', module: 'pharmacy', category: 'Support & Diagnostics' },
-  { title: 'Pharmacy Stock & Prediction', path: '/pharmacy/stock', icon: 'Boxes', module: 'pharmacy', category: 'Support & Diagnostics' },
-  { title: 'Inventory Desk', path: '/inventory/dashboard', icon: 'Boxes', module: 'inventory', category: 'Clinic Operations' },
-  { title: 'HR Desk', path: '/hr/dashboard', icon: 'UserCheck', module: 'hr', category: 'Clinic Operations' },
-  { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker', category: 'Live Tracking & Audit' },
-  { title: 'Emergency Console', path: '/emergency', icon: 'ShieldAlert', module: 'emergency', category: 'Emergency Services' },
+  { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker' },
+  { title: 'Reception Desk', path: '/reception/dashboard', icon: 'LayoutDashboard', module: 'appointments' },
+  { title: 'Clinical EMR Desk', path: '/doctor/dashboard', icon: 'Stethoscope', module: 'doctorConsultation' },
+  { title: 'IPD Requisitions', path: '/nurse-incharge/dashboard?tab=REQUISITIONS', icon: 'BedDouble', module: 'nursing' },
+  { title: 'Admitted Inpatients', path: '/nurse-incharge/dashboard?tab=ADMITTED', icon: 'UserCheck', module: 'nursing' },
+  { title: 'Ward Bed Matrix', path: '/admin/bed-matrix', icon: 'LayoutGrid', module: 'ipd' },
+  { title: 'Patient Requests', path: '/nurse-incharge/dashboard?tab=REQUESTS', icon: 'Activity', module: 'nursing' },
+  { title: 'Medication & Tasks', path: '/nurse-incharge/dashboard?tab=TASKS', icon: 'Stethoscope', module: 'nursing' },
+  { title: 'Laboratory Desk', path: '/laboratory/dashboard', icon: 'TestTube', module: 'laboratory' },
+  { title: 'Radiology Desk', path: '/radiology/dashboard', icon: 'Scan', module: 'radiology' },
+  { title: 'Pharmacy Desk', path: '/pharmacy/dashboard', icon: 'Pill', module: 'pharmacy' },
+  { title: 'Pharmacy Stock & Prediction', path: '/pharmacy/stock', icon: 'Boxes', module: 'pharmacy' },
+  { title: 'Central Billing Desk', path: '/billing/dashboard', icon: 'CreditCard', module: 'billing' },
+  { title: 'Receipts & Payments', path: '/billing/dashboard?tab=RECEIPTS', icon: 'Receipt', module: 'billing' },
+  { title: 'Emergency Console', path: '/emergency', icon: 'ShieldAlert', module: 'emergency' },
+  { title: 'Inventory Desk', path: '/inventory/dashboard', icon: 'Boxes', module: 'inventory' },
+  { title: 'HR Desk', path: '/hr/dashboard', icon: 'UserCheck', module: 'hr' },
 ];
 
 const checkItemPermission = (user, item) => {
@@ -386,42 +385,17 @@ export const Sidebar = ({ isOpen, onClose }) => {
     };
   }, [user?.role, user?._id || user?.id, socket, fetchReceiptsCount]);
 
-  const formatTenantPath = (path) => {
-    if (!path) return path;
-    const targetPath = path;
-    if (user?.role === 'SUPER_ADMIN') return targetPath;
-    const domainFromPath = location.pathname.split('/')[1];
-    const isKnownNonTenant = ['admin', 'hospital-admin', 'doctor', 'reception', 'billing', 'pharmacy', 'laboratory', 'radiology', 'nursing', '403', 'login', 'reset-password'].includes(domainFromPath);
-    const domain = user?.hospitalDomain || (!isKnownNonTenant && domainFromPath ? domainFromPath : null);
-
-    if (!domain) {
-      if (targetPath.startsWith('/admin')) {
-        return targetPath.replace(/^\/admin/, '/hospital-admin');
-      }
-      return targetPath;
-    }
-    if (targetPath.startsWith(`/${domain}`)) return targetPath;
-    return `/${domain}${targetPath}`;
-  };
+  const formatTenantPath = (path) => path;
 
   const handleSwitchMode = (targetMode) => {
     setMode(targetMode);
-    const domainFromPath = location.pathname.split('/')[1];
-    const isKnownNonTenant = ['admin', 'hospital-admin', 'doctor', 'reception', 'billing', 'pharmacy', 'laboratory', 'radiology', 'nursing', '403', 'login', 'reset-password'].includes(domainFromPath);
-    const domain = user?.hospitalDomain || (!isKnownNonTenant && domainFromPath ? domainFromPath : null);
 
     if (targetMode === 'WORK') {
       const workRoute = getDefaultWorkRoute(user);
       if (!workRoute) return;
-      const target = domain ? `/${domain}${workRoute}` : workRoute;
-      navigate(target);
+      navigate(workRoute);
     } else if (targetMode === 'ADMIN') {
-      if (user?.role === 'SUPER_ADMIN') {
-        navigate('/admin/dashboard');
-      } else {
-        const target = domain ? `/${domain}/admin/dashboard` : '/hospital-admin/dashboard';
-        navigate(target);
-      }
+      navigate('/admin/dashboard');
     }
   };
 

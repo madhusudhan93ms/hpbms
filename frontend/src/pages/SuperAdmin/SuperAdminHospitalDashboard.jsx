@@ -11,6 +11,7 @@ import {
 import { StatCard } from '../../components/ui/StatCard';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { PasswordInput } from '../../components/ui/PasswordInput';
 import { axiosClient } from '../../api/axiosClient';
 import { SuperAdminHospitalContext } from '../../components/superadmin/SuperAdminModuleBridge';
 import { useSuperAdminContextStore } from '../../store/superAdminContextStore';
@@ -1044,30 +1045,35 @@ export const SuperAdminHospitalDashboard = () => {
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">New Password</label>
-                <input
-                  type="text"
-                  placeholder="Enter new password (min. 8 characters)"
-                  value={newPasswordInput}
-                  onChange={(e) => setNewPasswordInput(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
+              <PasswordInput
+                label="1. New Password"
+                placeholder="Enter new password (min. 8 characters)"
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
+                inputClassName="font-mono"
+                required
+              />
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Confirm New Password</label>
-                <input
-                  type="text"
-                  placeholder="Re-enter new password to confirm"
-                  value={confirmPasswordInput}
-                  onChange={(e) => setConfirmPasswordInput(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                {confirmPasswordInput && newPasswordInput !== confirmPasswordInput && (
-                  <p className="text-[11px] text-rose-500 font-semibold mt-1">Passwords do not match</p>
-                )}
-              </div>
+              <PasswordInput
+                label="2. Confirm New Password"
+                placeholder="Re-enter the new password to confirm"
+                value={confirmPasswordInput}
+                onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                inputClassName={`font-mono ${
+                  confirmPasswordInput && newPasswordInput !== confirmPasswordInput ? 'border-rose-400 bg-rose-50/50' : ''
+                }`}
+                helperText={
+                  confirmPasswordInput && newPasswordInput !== confirmPasswordInput
+                    ? 'Passwords do not match!'
+                    : ''
+                }
+                error={
+                  confirmPasswordInput && newPasswordInput !== confirmPasswordInput
+                    ? 'Passwords do not match'
+                    : ''
+                }
+                required
+              />
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Button variant="outline" size="sm" onClick={() => setSelectedStaffForPassword(null)}>

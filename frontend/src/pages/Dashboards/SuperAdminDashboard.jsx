@@ -25,6 +25,7 @@ export const SuperAdminDashboard = () => {
     contactEmail: '',
     contactPhone: '',
     adminPassword: '',
+    confirmAdminPassword: '',
   });
 
   useEffect(() => {
@@ -73,6 +74,10 @@ export const SuperAdminDashboard = () => {
     e.preventDefault();
     if (!directForm.adminPassword || directForm.adminPassword.length < 8) {
       setActionMessage('Hospital administrator password must be at least 8 characters long.');
+      return;
+    }
+    if (directForm.adminPassword !== directForm.confirmAdminPassword) {
+      setActionMessage('Hospital administrator password and confirm password do not match.');
       return;
     }
     setIsLoading(true);
@@ -298,6 +303,23 @@ export const SuperAdminDashboard = () => {
                   <Input label="Hospital Authorized Officer Name" value={directForm.contactName} onChange={(e) => setDirectForm({ ...directForm, contactName: e.target.value })} placeholder="Your Name" required />
                   <Input label="Hospital Admin Email (Handover Login ID)" type="email" value={directForm.contactEmail} onChange={(e) => setDirectForm({ ...directForm, contactEmail: e.target.value })} placeholder="email@gmail.com" required />
                   <PasswordInput label="Hospital Admin Password" value={directForm.adminPassword} onChange={(e) => setDirectForm({ ...directForm, adminPassword: e.target.value })} placeholder="Minimum 8 characters" required />
+                  <PasswordInput
+                    label="Confirm Admin Password"
+                    value={directForm.confirmAdminPassword}
+                    onChange={(e) => setDirectForm({ ...directForm, confirmAdminPassword: e.target.value })}
+                    placeholder="Re-enter admin password"
+                    helperText={
+                      directForm.confirmAdminPassword && directForm.adminPassword !== directForm.confirmAdminPassword
+                        ? 'Passwords do not match!'
+                        : ''
+                    }
+                    error={
+                      directForm.confirmAdminPassword && directForm.adminPassword !== directForm.confirmAdminPassword
+                        ? 'Passwords do not match'
+                        : ''
+                    }
+                    required
+                  />
 
                   <div className="flex gap-2 pt-2">
                     <Button type="button" variant="outline" className="w-1/2" onClick={() => setIsDirectCreateOpen(false)}>Cancel</Button>

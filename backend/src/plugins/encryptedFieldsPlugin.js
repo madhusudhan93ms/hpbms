@@ -13,7 +13,13 @@ export const encryptedFieldsPlugin = (schema, { fields = [] } = {}) => {
       throw new Error(`Encrypted schema path must be a String: ${field}`);
     }
     schemaType.set((value) => encryptField(value));
-    schemaType.get((value) => decryptField(value));
+    schemaType.get((value) => {
+      try {
+        return decryptField(value);
+      } catch (err) {
+        return value;
+      }
+    });
   }
 
   const existingToJSON = schema.get('toJSON') || {};

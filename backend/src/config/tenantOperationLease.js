@@ -23,29 +23,33 @@ const ensureIndexes = async () => {
   await indexesReady;
 };
 
-export const acquireTenantWriteLease = async ({ hospitalId, method, path }) => {
+export const acquireTenantWriteLease = async ({ hospitalId, method, path } = {}) => {
   await ensureIndexes();
   const requestId = randomUUID();
-  const tenantId = new mongoose.Types.ObjectId(String(hospitalId));
+  const tenantId = hospitalId ? new mongoose.Types.ObjectId(String(hospitalId)) : null;
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-  await collection().insertOne({ requestId, hospitalId: tenantId, method, path, createdAt: new Date(), expiresAt });
+  if (tenantId) {
+    await collection().insertOne({ requestId, hospitalId: tenantId, method, path, createdAt: new Date(), expiresAt });
 
-  const hospital = await mongoose.connection.collection('hospitals').findOne(
-    { _id: tenantId },
-    { projection: { databaseWriteLocked: 1, databaseWriteLockReason: 1 } },
-  );
-  if (hospital?.databaseWriteLocked) {
-    await collection().deleteOne({ requestId });
-    const error = new Error(hospital.databaseWriteLockReason || 'Hospital data is temporarily read-only for database maintenance.');
-    error.code = 'TENANT_WRITE_MAINTENANCE';
-    throw error;
+    const hospital = await mongoose.connection.collection('hospitals').findOne(
+      { _id: tenantId },
+      { projection: { databaseWriteLocked: 1, databaseWriteLockReason: 1 } },
+    );
+    if (hospital?.databaseWriteLocked) {
+      await collection().deleteOne({ requestId });
+      const error = new Error(hospital.databaseWriteLockReason || 'Hospital data is temporarily read-only for database maintenance.');
+      error.code = 'TENANT_WRITE_MAINTENANCE';
+      throw error;
+    }
   }
 
   let released = false;
   return async () => {
     if (released) return;
     released = true;
-    await collection().deleteOne({ requestId }).catch(() => {});
+    if (tenantId) {
+      await collection().deleteOne({ requestId }).catch(() => {});
+    }
   };
 };
 
@@ -63,3 +67,4 @@ export const waitForTenantWritesToDrain = async (hospitalId, { timeoutMs = 30000
   error.code = 'TENANT_WRITES_DRAIN_TIMEOUT';
   throw error;
 };
+
