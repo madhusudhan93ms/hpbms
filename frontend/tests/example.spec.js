@@ -18,5 +18,8 @@ test.describe('Login & Core Application Load', () => {
     const submitBtn = page.getByRole('button', { name: /Sign In to Workstation/i });
     await expect(submitBtn).toBeVisible();
     await expect(submitBtn).toBeEnabled();
+
+    // Capture visual snapshot for daily QA report
+    await page.screenshot({ path: 'test-results/login-workstation.png' });
   });
 });
