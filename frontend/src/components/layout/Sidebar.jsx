@@ -529,11 +529,19 @@ export const Sidebar = ({ isOpen, onClose }) => {
   const isItemActive = (itemPath) => {
     const formatted = formatTenantPath(itemPath);
     const [itemPathname, itemSearch] = formatted.split('?');
-    const currentSearch = location.search.replace('?', '');
+    const currentSearch = location.search.replace(/^\?/, '');
     if (itemSearch) {
       return location.pathname === itemPathname && currentSearch === itemSearch;
     }
-    return (location.pathname === itemPathname || location.pathname === itemPath.split('?')[0]) && !location.search.includes('tab=');
+    if (location.pathname === itemPathname || location.pathname === itemPath.split('?')[0]) {
+      if (!currentSearch) return true;
+      const siblingHasExactQuery = menuItems.some((it) => {
+        const [, itQuery] = it.path.split('?');
+        return itQuery && it.path.split('?')[0] === itemPath.split('?')[0] && itQuery === currentSearch;
+      });
+      return !siblingHasExactQuery;
+    }
+    return false;
   };
 
   useEffect(() => {
@@ -571,6 +579,8 @@ export const Sidebar = ({ isOpen, onClose }) => {
     'Billing & Analytics': 'BarChart3',
     'Billing & Cashier': 'CreditCard',
     'OPD Operations': 'ClipboardList',
+    'Clinic Operations': 'Boxes',
+    'Live Tracking & Audit': 'GitBranch',
     'Emergency Services': 'ShieldAlert',
     'General': 'Layers',
     'General Modules': 'Layers',
@@ -578,23 +588,50 @@ export const Sidebar = ({ isOpen, onClose }) => {
   };
 
   const groupedCategories = React.useMemo(() => {
-    const groups = [];
     const categoryMap = new Map();
 
     menuItems.forEach((item) => {
       const catName = item.category || (isDual && currentMode === 'WORK' ? 'Workstation Desks' : 'General Modules');
       if (!categoryMap.has(catName)) {
         categoryMap.set(catName, []);
-        groups.push({ category: catName, items: categoryMap.get(catName) });
       }
       categoryMap.get(catName).push(item);
+    });
+
+    const groups = Array.from(categoryMap.entries()).map(([category, items]) => {
+      const sortedItems = [...items].sort((a, b) => {
+        const idxA = CANONICAL_ITEM_ORDER.indexOf(a.path);
+        const idxB = CANONICAL_ITEM_ORDER.indexOf(b.path);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return 0;
+      });
+      return { category, items: sortedItems };
+    });
+
+    // Sort categories according to CANONICAL_CATEGORY_ORDER
+    groups.sort((a, b) => {
+      let idxA = CANONICAL_CATEGORY_ORDER.indexOf(a.category);
+      let idxB = CANONICAL_CATEGORY_ORDER.indexOf(b.category);
+      if (idxA === -1) idxA = 999;
+      if (idxB === -1) idxB = 999;
+      return idxA - idxB;
     });
 
     return groups;
   }, [menuItems, isDual, currentMode]);
 
-  // Sub-navigations / categories are closed by default
+  // Sub-navigations / categories are closed by default, but active category is automatically expanded
   const [openCategories, setOpenCategories] = useState({});
+
+  useEffect(() => {
+    groupedCategories.forEach((group) => {
+      if (group.items.some((it) => isItemActive(it.path))) {
+        setOpenCategories((prev) => (prev[group.category] ? prev : { ...prev, [group.category]: true }));
+      }
+    });
+  }, [location.pathname, location.search, groupedCategories]);
 
   const toggleCategory = (catName) => {
     setOpenCategories((prev) => ({
