@@ -1,9 +1,18 @@
 import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import { Patient } from '../../models/Patient.js';
 import { Hospital } from '../../models/Hospital.js';
 import { GlobalPatient } from '../../models/GlobalPatient.js';
 import { User } from '../../models/User.js';
 import { GuardianLink } from '../../models/GuardianLink.js';
+import { Appointment } from '../../models/Appointment.js';
+import { Admission } from '../../models/Admission.js';
+import { Bed } from '../../models/Bed.js';
+import { Prescription } from '../../models/Prescription.js';
+import { Invoice } from '../../models/Invoice.js';
+import { Receipt } from '../../models/Receipt.js';
+import { DiagnosticOrder } from '../../models/DiagnosticOrder.js';
+import { NurseTask } from '../../models/NurseTask.js';
 import { ApiError } from '../../utils/apiError.js';
 import { requireBranchContext, requireHospitalContext } from '../../utils/tenantContext.js';
 
@@ -556,5 +565,116 @@ export class PatientsService {
       throw new ApiError(404, `Patient with UHID ${uhid} not found`, null, 'NOT_FOUND');
     }
     return patient;
+  }
+
+  static async deletePatient(id, user) {
+    if (!id) {
+      throw new ApiError(400, 'Patient identifier is required', null, 'VALIDATION_ERROR');
+    }
+
+    let hospitalId = null;
+    try {
+      hospitalId = requireHospitalContext(user);
+    } catch {
+      if (user?.role === 'SUPER_ADMIN') {
+        hospitalId = null;
+      }
+    }
+
+    const trimmedId = String(id).trim();
+    let filter = {};
+    if (mongoose.isValidObjectId(trimmedId)) {
+      filter = { _id: trimmedId };
+    } else {
+      filter = { uhid: trimmedId.toUpperCase() };
+    }
+
+    if (hospitalId) {
+      filter.hospitalId = hospitalId;
+    }
+
+    const patient = await Patient.findOne(filter);
+    if (!patient) {
+      throw new ApiError(404, 'Patient record not found', null, 'NOT_FOUND');
+    }
+
+    const patientHospitalId = patient.hospitalId;
+    const patientBranchId = patient.branchId;
+    const patientId = patient._id;
+    const patientUhid = patient.uhid;
+
+    // Check if patient has active IPD admission and release bed if occupied
+    try {
+      const activeAdmissions = await Admission.find({ patientId });
+      for (const adm of activeAdmissions) {
+        if (adm.bedId) {
+          await Bed.updateOne(
+            { _id: adm.bedId },
+            { $set: { status: 'AVAILABLE', currentPatientId: null, currentAdmissionId: null } }
+          );
+        }
+      }
+      await Admission.deleteMany({ patientId });
+    } catch (admErr) {
+      console.error('[Delete Patient Admission Cleanup Notice]', admErr.message);
+    }
+
+    // Clean up related appointments / queue tokens
+    try {
+      await Appointment.deleteMany({ patientId });
+    } catch (apptErr) {
+      console.error('[Delete Patient Appointment Cleanup Notice]', apptErr.message);
+    }
+
+    // Clean up prescriptions, diagnostics, invoices, receipts, nurse tasks
+    try {
+      await Prescription.deleteMany({ patientId });
+      await DiagnosticOrder.deleteMany({ patientId });
+      await Invoice.deleteMany({ patientId });
+      await Receipt.deleteMany({ patientId });
+      await NurseTask.deleteMany({ patientId });
+    } catch (relErr) {
+      console.error('[Delete Patient Related Records Notice]', relErr.message);
+    }
+
+    // Clean up user account linked to this patient (if any)
+    try {
+      await User.deleteMany({
+        $or: [
+          { uhid: patientUhid, role: 'PATIENT' },
+          ...(patient.userId ? [{ _id: patient.userId }] : [])
+        ]
+      });
+      await GuardianLink.deleteMany({ patientId });
+    } catch (uErr) {
+      console.error('[Delete Patient User Notice]', uErr.message);
+    }
+
+    // Delete the patient record itself
+    await Patient.deleteOne({ _id: patientId });
+
+    // Real-time broadcast to connected staff
+    try {
+      const { socketManager } = await import('../../events/socketManager.js');
+      const delPayload = {
+        patientId,
+        uhid: patientUhid,
+        timestamp: new Date(),
+      };
+      if (patientBranchId) {
+        socketManager.emitToBranch(String(patientBranchId), 'patient:deleted', delPayload);
+      } else if (patientHospitalId) {
+        socketManager.emitToHospital(String(patientHospitalId), 'patient:deleted', delPayload);
+      }
+    } catch (sockErr) {
+      // Socket errors do not affect deletion
+    }
+
+    return {
+      deleted: true,
+      patientId,
+      uhid: patientUhid,
+      message: `Patient ${patient.firstName} ${patient.lastName || ''} (${patientUhid}) successfully deleted.`,
+    };
   }
 }

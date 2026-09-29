@@ -50,6 +50,10 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
   const [deletedBillingSearch, setDeletedBillingSearch] = useState('');
   const [pharmacyStockSearch, setPharmacyStockSearch] = useState('');
   const [selectedInvoiceForView, setSelectedInvoiceForView] = useState(null);
+  const [patientToDelete, setPatientToDelete] = useState(null);
+  const [isDeletingPatient, setIsDeletingPatient] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [billingSummary, setBillingSummary] = useState({
     totalRevenue: 0,
     totalBills: 0,
@@ -80,6 +84,14 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
       fetchData();
     };
 
+    const handlePatientDeleted = (data) => {
+      if (data?.patientId || data?.uhid) {
+        setPatients((prev) => prev.filter((p) => p._id !== data.patientId && p.uhid !== data.uhid));
+      } else {
+        fetchData();
+      }
+    };
+
     socket.on('doctor:availability_changed', handleDoctorAvailability);
     socket.on('billing:invoice_created', handleDataUpdate);
     socket.on('billing:payment_collected', handleDataUpdate);
@@ -87,6 +99,7 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
     socket.on('billing:invoice_deleted', handleDataUpdate);
     socket.on('patient:registered', handleDataUpdate);
     socket.on('patient:created', handleDataUpdate);
+    socket.on('patient:deleted', handlePatientDeleted);
     socket.on('token:generated', handleDataUpdate);
     socket.on('opd_queue:status_changed', handleDataUpdate);
     socket.on('opd_queue:updated', handleDataUpdate);
@@ -107,6 +120,7 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
       socket.off('billing:invoice_deleted', handleDataUpdate);
       socket.off('patient:registered', handleDataUpdate);
       socket.off('patient:created', handleDataUpdate);
+      socket.off('patient:deleted', handlePatientDeleted);
       socket.off('token:generated', handleDataUpdate);
       socket.off('opd_queue:status_changed', handleDataUpdate);
       socket.off('opd_queue:updated', handleDataUpdate);
@@ -120,6 +134,24 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
       socket.off('workflow:pending_changed', handleDataUpdate);
     };
   }, [socket]);
+
+  const handleDeletePatient = async () => {
+    if (!patientToDelete) return;
+    setIsDeletingPatient(true);
+    setDeleteError('');
+    try {
+      const patientId = patientToDelete._id || patientToDelete.uhid;
+      await axiosClient.delete(`/patients/${patientId}`);
+      setPatients((prev) => prev.filter((p) => p._id !== patientToDelete._id && p.uhid !== patientToDelete.uhid));
+      setPatientToDelete(null);
+    } catch (err) {
+      console.error('Failed to delete patient:', err);
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to delete patient record';
+      setDeleteError(errMsg);
+    } finally {
+      setIsDeletingPatient(false);
+    }
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -1310,6 +1342,15 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
       }
 
       case 'patients': {
+        const filteredPatients = patients.filter((pat) => {
+          if (!patientSearchTerm.trim()) return true;
+          const term = patientSearchTerm.toLowerCase();
+          const name = (pat.name || `${pat.firstName || ''} ${pat.lastName || ''}`).toLowerCase();
+          const uhid = (pat.uhid || '').toLowerCase();
+          const phone = (pat.phone || '').toLowerCase();
+          return name.includes(term) || uhid.includes(term) || phone.includes(term);
+        });
+
         return (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1332,10 +1373,37 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
             </div>
 
             <Card>
-              <h3 className="text-base font-bold text-neutral-900 mb-4 flex items-center gap-2">
-                <ShieldCheck size={18} className="text-indigo-600" />
-                Patient Administrative Register ({patients.length})
-              </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-neutral-900 flex items-center gap-2">
+                    <ShieldCheck size={18} className="text-indigo-600" />
+                    Patient Administrative Register ({filteredPatients.length}
+                    {patientSearchTerm.trim() && ` of ${patients.length}`})
+                  </h3>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    Live patient administrative directory with real-time record management and deletion controls
+                  </p>
+                </div>
+                <div className="relative w-full sm:w-72">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search patient, UHID, phone..."
+                    value={patientSearchTerm}
+                    onChange={(e) => setPatientSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-8 py-1.5 text-xs bg-neutral-50 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-neutral-800"
+                  />
+                  {patientSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setPatientSearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 text-xs font-bold"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-neutral-100 text-neutral-600 uppercase text-[10px] border-b border-neutral-200">
@@ -1344,36 +1412,59 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
                       <th className="p-3">Phone & Age/Gender</th>
                       <th className="p-3">Category</th>
                       <th className="p-3">Current Status</th>
-                      <th className="p-3 text-right">Registration Date</th>
+                      <th className="p-3">Registration Date</th>
+                      <th className="p-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100 text-neutral-800">
-                    {patients.map((pat) => {
-                      const patientFullName = pat.name || `${pat.firstName || ''} ${pat.lastName || ''}`.trim() || 'Patient';
-                      const statusLabel = pat.admissionStatus === 'ACTIVE_ADMISSION' ? 'ADMITTED (IPD)' : (pat.admissionStatus === 'DISCHARGED' ? 'DISCHARGED' : 'REGISTERED (OPD)');
-                      const statusClass = pat.admissionStatus === 'ACTIVE_ADMISSION' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                      return (
-                        <tr key={pat._id} className="hover:bg-neutral-50">
-                          <td className="p-3 font-bold text-neutral-900">
-                            {patientFullName}
-                            <p className="text-[10px] font-mono text-indigo-600">{pat.uhid}</p>
-                          </td>
-                          <td className="p-3">
-                            <p className="font-medium text-neutral-800">{pat.phone || 'N/A'}</p>
-                            <p className="text-[10px] text-neutral-500">{pat.age ? `${pat.age} yrs` : 'Adult'} • {pat.gender || 'General'}</p>
-                          </td>
-                          <td className="p-3 font-semibold text-neutral-700">{pat.category || 'GENERAL'}</td>
-                          <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${statusClass}`}>
-                              {statusLabel}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right text-neutral-500">
-                            {new Date(pat.createdAt || Date.now()).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {filteredPatients.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-neutral-500 text-xs">
+                          {patientSearchTerm ? 'No patients matching your search criteria.' : 'No registered patients found.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPatients.map((pat) => {
+                        const patientFullName = pat.name || `${pat.firstName || ''} ${pat.lastName || ''}`.trim() || 'Patient';
+                        const statusLabel = pat.admissionStatus === 'ACTIVE_ADMISSION' ? 'ADMITTED (IPD)' : (pat.admissionStatus === 'DISCHARGED' ? 'DISCHARGED' : 'REGISTERED (OPD)');
+                        const statusClass = pat.admissionStatus === 'ACTIVE_ADMISSION' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                        return (
+                          <tr key={pat._id || pat.uhid} className="hover:bg-neutral-50 transition-colors">
+                            <td className="p-3 font-bold text-neutral-900">
+                              {patientFullName}
+                              <p className="text-[10px] font-mono text-indigo-600">{pat.uhid}</p>
+                            </td>
+                            <td className="p-3">
+                              <p className="font-medium text-neutral-800">{pat.phone || 'N/A'}</p>
+                              <p className="text-[10px] text-neutral-500">{pat.age ? `${pat.age} yrs` : 'Adult'} • {pat.gender || 'General'}</p>
+                            </td>
+                            <td className="p-3 font-semibold text-neutral-700">{pat.category || 'GENERAL'}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${statusClass}`}>
+                                {statusLabel}
+                              </span>
+                            </td>
+                            <td className="p-3 text-neutral-500">
+                              {new Date(pat.createdAt || Date.now()).toLocaleDateString()}
+                            </td>
+                            <td className="p-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeleteError('');
+                                  setPatientToDelete(pat);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-lg transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer"
+                                title={`Delete ${patientFullName}`}
+                              >
+                                <Trash2 size={13} />
+                                <span>Delete</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1406,6 +1497,88 @@ export const HospitalAdminManagementViews = ({ viewType }) => {
   return (
     <div className="animate-fade-in">
       {renderViewContent()}
+
+      {/* Patient Delete Confirmation Modal */}
+      {patientToDelete && (
+        <Modal
+          isOpen={Boolean(patientToDelete)}
+          onClose={() => {
+            if (!isDeletingPatient) {
+              setPatientToDelete(null);
+              setDeleteError('');
+            }
+          }}
+          title="Delete Patient Record"
+          subtitle="Permanent administrative deletion"
+          icon={AlertCircle}
+          maxWidth="max-w-md"
+          footer={
+            <div className="flex items-center justify-end gap-3 w-full">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPatientToDelete(null);
+                  setDeleteError('');
+                }}
+                disabled={isDeletingPatient}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleDeletePatient}
+                isLoading={isDeletingPatient}
+                className="bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5"
+              >
+                <Trash2 size={14} />
+                <span>{isDeletingPatient ? 'Deleting...' : 'Confirm Delete'}</span>
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-sm text-neutral-700">
+            {deleteError && (
+              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-start gap-2">
+                <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+            <p className="text-neutral-600 text-xs">
+              Are you sure you want to permanently delete this patient record? This action cannot be undone.
+            </p>
+            <div className="p-3.5 bg-neutral-50 border border-neutral-200 rounded-xl space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-neutral-500 font-medium">Patient Name:</span>
+                <span className="font-bold text-neutral-900">
+                  {patientToDelete.name || `${patientToDelete.firstName || ''} ${patientToDelete.lastName || ''}`.trim() || 'Patient'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-neutral-500 font-medium">UHID:</span>
+                <span className="font-mono font-bold text-indigo-600">{patientToDelete.uhid}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-neutral-500 font-medium">Phone:</span>
+                <span className="font-medium text-neutral-800">{patientToDelete.phone || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-neutral-500 font-medium">Status:</span>
+                <span className="font-semibold text-neutral-700">
+                  {patientToDelete.admissionStatus === 'ACTIVE_ADMISSION' ? 'ADMITTED (IPD)' : (patientToDelete.admissionStatus === 'DISCHARGED' ? 'DISCHARGED' : 'REGISTERED (OPD)')}
+                </span>
+              </div>
+            </div>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs flex items-start gap-2">
+              <ShieldAlert size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <span>
+                <strong>Warning:</strong> Deleting this patient will release any active bed assignment and clean up linked clinical appointments and prescription records from the register.
+              </span>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

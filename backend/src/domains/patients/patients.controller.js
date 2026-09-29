@@ -75,3 +75,12 @@ export const getPatientByUhid = async (req, res, next) => {
     next(error);
   }
 };
+
+export const deletePatient = async (req, res, next) => {
+  try {
+    const result = await PatientsService.deletePatient(req.params.id, req.user);
+    return sendSuccess(res, 200, result.message, result);
+  } catch (error) {
+    next(error);
+  }
+};

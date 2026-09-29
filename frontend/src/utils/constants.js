@@ -169,9 +169,6 @@ export const MODULE_ACTION_MATRIX = {
 };
 
 export const ROLE_NAVIGATION = {
-  SUPER_ADMIN: [
-    { title: 'Emergency Console', path: '/admin/emergency', icon: 'ShieldAlert', module: 'emergency', category: 'Emergency Services' },
-  ],
   HOSPITAL_ADMIN: [
     // Executive & System Management
     { title: 'Dashboard Overview', path: '/admin/dashboard', icon: 'LayoutDashboard', module: 'dashboard', category: 'Executive & Setup' },
@@ -196,8 +193,6 @@ export const ROLE_NAVIGATION = {
     { title: 'Reports & Analytics', path: '/admin/reports', icon: 'BarChart3', module: 'reports', category: 'System & Analytics' },
     { title: 'Audit Logs', path: '/admin/reports?tab=audit', icon: 'FileText', module: 'auditLogs', category: 'System & Analytics' },
     { title: 'Notifications & Alerts', path: '/admin/dashboard?tab=notifications', icon: 'Bell', module: 'notifications', category: 'System & Analytics' },
-    { title: 'Plan Details', path: '/admin/plan-details', icon: 'BadgeCheck', module: 'dashboard', category: 'System & Analytics' },
-    { title: 'Usage & Limits', path: '/admin/usage-limits', icon: 'Gauge', module: 'dashboard', category: 'System & Analytics' },
   ],
   DOCTOR: [
     { title: 'Clinical EMR Desk', path: '/doctor/dashboard', icon: 'Stethoscope', module: 'doctorConsultation', category: 'Clinical Workstation' },
@@ -229,6 +224,8 @@ export const ROLE_NAVIGATION = {
   RECEPTIONIST: [
     { title: 'Reception Desk', path: '/reception/registered-patients', icon: 'LayoutDashboard', module: 'appointments', category: 'Front Desk & Billing' },
     { title: 'Follow-Up Visits', path: '/reception/registered-patients?tab=FOLLOW_UPS', icon: 'Calendar', module: 'appointments', category: 'Front Desk & Billing' },
+    { title: 'Central Billing Desk', path: '/billing/dashboard', icon: 'CreditCard', module: 'billing', category: 'Front Desk & Billing' },
+    { title: 'Receipts & Payments', path: '/billing/dashboard?tab=RECEIPTS', icon: 'Receipt', module: 'billing', category: 'Front Desk & Billing' },
     { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker', category: 'Live Tracking & Audit' },
     { title: 'Emergency Console', path: '/emergency', icon: 'ShieldAlert', module: 'emergency', category: 'Emergency Services' },
   ],
@@ -277,12 +274,16 @@ export const ROLE_NAVIGATION = {
     { title: 'Emergency Console', path: '/emergency', icon: 'ShieldAlert', module: 'emergency', category: 'Emergency Services' },
   ],
   CASHIER: [
+    { title: 'Reception Desk', path: '/reception/registered-patients', icon: 'LayoutDashboard', module: 'appointments', category: 'Front Desk & Billing' },
+    { title: 'Follow-Up Visits', path: '/reception/registered-patients?tab=FOLLOW_UPS', icon: 'Calendar', module: 'appointments', category: 'Front Desk & Billing' },
     { title: 'Central Billing Desk', path: '/billing/dashboard', icon: 'CreditCard', module: 'billing', category: 'Front Desk & Billing' },
     { title: 'Receipts & Payments', path: '/billing/dashboard?tab=RECEIPTS', icon: 'Receipt', module: 'billing', category: 'Front Desk & Billing' },
     { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker', category: 'Live Tracking & Audit' },
     { title: 'Emergency Console', path: '/emergency', icon: 'ShieldAlert', module: 'emergency', category: 'Emergency Services' },
   ],
   BILLING_STAFF: [
+    { title: 'Reception Desk', path: '/reception/registered-patients', icon: 'LayoutDashboard', module: 'appointments', category: 'Front Desk & Billing' },
+    { title: 'Follow-Up Visits', path: '/reception/registered-patients?tab=FOLLOW_UPS', icon: 'Calendar', module: 'appointments', category: 'Front Desk & Billing' },
     { title: 'Central Billing Desk', path: '/billing/dashboard', icon: 'CreditCard', module: 'billing', category: 'Front Desk & Billing' },
     { title: 'Receipts & Payments', path: '/billing/dashboard?tab=RECEIPTS', icon: 'Receipt', module: 'billing', category: 'Front Desk & Billing' },
     { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker', category: 'Live Tracking & Audit' },
@@ -291,12 +292,15 @@ export const ROLE_NAVIGATION = {
   OPD_STAFF: [
     { title: 'Reception Desk', path: '/reception/registered-patients', icon: 'LayoutDashboard', module: 'appointments', category: 'Front Desk & Billing' },
     { title: 'Follow-Up Visits', path: '/reception/registered-patients?tab=FOLLOW_UPS', icon: 'Calendar', module: 'appointments', category: 'Front Desk & Billing' },
+    { title: 'Central Billing Desk', path: '/billing/dashboard', icon: 'CreditCard', module: 'billing', category: 'Front Desk & Billing' },
+    { title: 'Receipts & Payments', path: '/billing/dashboard?tab=RECEIPTS', icon: 'Receipt', module: 'billing', category: 'Front Desk & Billing' },
     { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker', category: 'Live Tracking & Audit' },
     { title: 'Emergency Console', path: '/emergency', icon: 'ShieldAlert', module: 'emergency', category: 'Emergency Services' },
   ],
   IPD_STAFF: [
-    { title: 'IPD Inpatient Desk', path: '/nurse-incharge/dashboard', icon: 'BedDouble', module: 'ipd', category: 'Inpatient & Ward' },
-    { title: 'Ward & Bed Matrix', path: '/nurse/bed-matrix', icon: 'BedDouble', module: 'nursing', category: 'Inpatient & Ward' },
+    { title: 'IPD Requisitions', path: '/nurse-incharge/dashboard?tab=REQUISITIONS', icon: 'BedDouble', module: 'nursing', category: 'Inpatient & Ward' },
+    { title: 'Admitted Inpatients', path: '/nurse-incharge/dashboard?tab=ADMITTED', icon: 'UserCheck', module: 'nursing', category: 'Inpatient & Ward' },
+    { title: 'Ward & Bed Matrix', path: '/admin/bed-matrix', icon: 'BedDouble', module: 'nursing', category: 'Inpatient & Ward' },
     { title: 'Live Data Tracker', path: '/workflow/tracker', icon: 'GitBranch', module: 'workflowTracker', category: 'Live Tracking & Audit' },
     { title: 'Emergency Console', path: '/emergency', icon: 'ShieldAlert', module: 'emergency', category: 'Emergency Services' },
   ],

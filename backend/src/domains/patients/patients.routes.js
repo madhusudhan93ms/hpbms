@@ -4,10 +4,11 @@ import {
   checkDuplicatePatient,
   searchGlobalPatient,
   getPatients,
-  getPatientByUhid
+  getPatientByUhid,
+  deletePatient,
 } from './patients.controller.js';
 import { verifyJwt } from '../../middleware/verifyJwt.js';
-import { requireAssignedRole } from '../../middleware/permissions.js';
+import { requireAssignedRole, requireRole } from '../../middleware/permissions.js';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.get('/global/search', searchGlobalPatient);
 router.post('/', requireAssignedRole('RECEPTIONIST', 'OPD_STAFF'), registerPatient);
 router.get('/', getPatients);
 router.get('/:uhid', getPatientByUhid);
+router.delete('/:id', requireRole('HOSPITAL_ADMIN', 'SUPER_ADMIN', 'RECEPTIONIST', 'OPD_STAFF'), deletePatient);
 
 export default router;
