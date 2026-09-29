@@ -45,3 +45,7 @@ pull_production_db.ps1
 restore_prod_db.mjs
 backend/restore_prod_db.mjs
 
+# Daily test reports
+daily-test-report.html
+daily-test-report.json
+
