@@ -136,13 +136,21 @@ axiosClient.interceptors.response.use(
     }
 
     // A 403 means the authenticated user lacks permission for one resource; it
-    // must not destroy a valid session. Only authentication failures (401) log out.
+    // must not destroy a valid session. Only genuine token/session failures (401) log out.
+    // We explicitly skip auto-logout for 401s that are password-verification errors
+    // (e.g. wrong admin password on staff password change) — those are bad-input errors,
+    // not session failures. The backend now sends 400 for those, but as a safety net
+    // we also guard by checking the error code from the server response.
     if (status === 401) {
-      localStorage.removeItem('hpmbs_access_token');
-      localStorage.removeItem('hpmbs_user');
-      localStorage.removeItem('hpmbs_super_admin_context');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      const serverErrorCode = error.response?.data?.error?.code || '';
+      const isPasswordVerificationError = serverErrorCode === 'INVALID_ADMIN_PASSWORD';
+      if (!isPasswordVerificationError) {
+        localStorage.removeItem('hpmbs_access_token');
+        localStorage.removeItem('hpmbs_user');
+        localStorage.removeItem('hpmbs_super_admin_context');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
       }
     }
 

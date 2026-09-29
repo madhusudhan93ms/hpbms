@@ -41,9 +41,13 @@ export const ResetPasswordPage = () => {
         token,
         newPassword: newPassword.trim(),
       });
-      setSuccessMessage(res.data.message || 'Password reset successfully!');
+      // axiosClient interceptor already unwraps response.data, so the shape is
+      // { success, message, data } — NOT { data: { message } }
+      setSuccessMessage(res.message || res.data?.message || 'Password reset successfully. You can now log in.');
+      // Auto-redirect to login after 3 seconds
+      setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
-      setErrorMessage(err.response?.data?.message || 'Invalid or expired password reset token.');
+      setErrorMessage(err.error?.message || err.response?.data?.message || 'Invalid or expired password reset token. Please request a new reset link.');
     } finally {
       setIsLoading(false);
     }

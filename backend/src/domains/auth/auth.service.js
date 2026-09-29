@@ -308,6 +308,19 @@ export class AuthService {
 
     user.failedLoginAttempts = 0;
     user.lockUntil = null;
+
+    // Self-healing loginIds: after data migration, loginIds may be stale or empty.
+    // Rebuild them from the current email/phone/employeeId so future logins don't fail.
+    const healedIds = new Set(Array.isArray(user.loginIds) ? user.loginIds : []);
+    if (user.email) healedIds.add(user.email.toLowerCase().trim());
+    if (user.phone) healedIds.add(user.phone.trim());
+    if (user.employeeId) {
+      healedIds.add(user.employeeId.trim());
+      healedIds.add(user.employeeId.trim().toUpperCase());
+      healedIds.add(user.employeeId.trim().toLowerCase());
+    }
+    user.loginIds = Array.from(healedIds);
+
     await user.save().catch(() => {});
 
     return await this.formatAuthResponse(user);
@@ -672,7 +685,9 @@ export class AuthService {
         throw new ApiError(404, 'Admin account not found. Please log out and log in again.', null, 'NOT_FOUND');
       }
       if (!adminPassword || !(await adminDoc.comparePassword(adminPassword))) {
-        throw new ApiError(401, 'Invalid Admin verification password. Please enter your logged-in Admin password.', null, 'INVALID_ADMIN_PASSWORD');
+        // Use 400 (not 401) so the frontend auth interceptor does NOT auto-logout the admin.
+        // A wrong verification password is a bad-input error, not an authentication failure.
+        throw new ApiError(400, 'Invalid Admin verification password. Please enter your own logged-in Admin password correctly.', null, 'INVALID_ADMIN_PASSWORD');
       }
     }
 
@@ -687,6 +702,18 @@ export class AuthService {
     staffDoc.passwordResetExpires = null;
     staffDoc.failedLoginAttempts = 0;
     staffDoc.lockUntil = null;
+
+    // Keep loginIds in sync so the user can still log in with email/phone/employeeId
+    const loginIdsSet = new Set();
+    if (staffDoc.email) loginIdsSet.add(staffDoc.email.toLowerCase().trim());
+    if (staffDoc.phone) loginIdsSet.add(staffDoc.phone.trim());
+    if (staffDoc.employeeId) {
+      loginIdsSet.add(staffDoc.employeeId.trim());
+      loginIdsSet.add(staffDoc.employeeId.trim().toUpperCase());
+      loginIdsSet.add(staffDoc.employeeId.trim().toLowerCase());
+    }
+    staffDoc.loginIds = Array.from(loginIdsSet);
+
     await staffDoc.save();
 
 
